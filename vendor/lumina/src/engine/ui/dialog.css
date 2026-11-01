@@ -1,0 +1,189 @@
+/*
+ * Luminati UI — the dialog window, its choices and the interaction prompt (DialogBox.js,
+ * InteractPrompt.js), drawn after mockup G (docs/specs/PIXEL_UI.md §5). Split out of ui.css
+ * (PIXEL_UI.md §8: one stylesheet per owner). The art is canvases placed in art px by the modules
+ * (layout/layout.js, art/); the text is in the type roles (layout/type.js, layout/base.css). This
+ * file holds what the CSS does: the layers, the pointer, the states and the motion — in whole art
+ * pixels and hard steps, like the rest of the pixel UI. Rules are scoped `.lu-root .lu-dialog …` /
+ * `.lu-root .lu-prompt …` so they win over base.css's `.lu-root .g` whatever the load order.
+ */
+
+/* ------------------------------------------------------------------------------------------ */
+/* Dialog window                                                                                */
+/* ------------------------------------------------------------------------------------------ */
+
+/* the stage (inset 0: the window group hangs from its bottom-left corner) */
+.lu-root .lu-dialog {
+  --lu-portrait: var(--g-g3);
+  z-index: 4;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.24s steps(3, end), visibility 0s linear 0.24s;
+}
+.lu-root .lu-dialog.is-open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.18s steps(3, end), visibility 0s;
+}
+.lu-root .lu-dialog.is-closing {
+  opacity: 0;
+  transition: opacity 0.24s steps(3, end), visibility 0s linear 0.24s;
+}
+/* the window rises 4 art px into place, one art px a step; it sinks 2 as it closes */
+.lu-root .lu-dialog .lu-dialog__win {
+  pointer-events: none;
+  transform: translateY(calc(var(--px) * 4));
+  transition: transform 0.2s steps(4, end);
+}
+.lu-root .lu-dialog.is-open .lu-dialog__win { transform: none; }
+.lu-root .lu-dialog.is-closing .lu-dialog__win { transform: translateY(calc(var(--px) * 2)); transition: transform 0.2s steps(2, end); }
+/* the window keeps its art pixels on every screen: under G's corner footprint (the root's
+   data-lu-scale="shrunk", base.css) it narrows to the screen instead of shrinking with the corner
+   groups (DialogBox._width), so its text keeps the crisp filters (a whole device scale) */
+.lu-root[data-lu-scale] .lu-dialog .g.grp.lu-dialog__win { scale: none; }
+.lu-root[data-lu-scale="shrunk"] .lu-dialog .tx.fx-crisp { filter: url(#lu-crisp); }
+.lu-root[data-lu-scale="shrunk"] .lu-dialog .tx.fx-soft { filter: url(#lu-soft); }
+.lu-root[data-lu-scale="shrunk"] .lu-dialog .tx.fx-aa { filter: url(#lu-aa); }
+
+/* the window's box is the click target (its frame canvases overhang it: no pointer there) */
+.lu-root .lu-dialog .lu-dialog__panel { cursor: var(--lu-cursor-pointer, pointer); }
+.lu-root .lu-dialog.is-open .lu-dialog__panel { pointer-events: auto; }
+.lu-root .lu-dialog .lu-dialog__panel * { pointer-events: none; }
+/* art layers: placed by their frame origin, no stacking context of their own (the frame under the
+   text at z 0, the ornaments over it at z 3, the portrait at z 1) */
+.lu-root .lu-dialog .lu-dialog__art { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+
+/* the text: the body role (styleText), one span per character, revealed by the typewriter; the
+   question under the speech (DialogLine.ask) likewise, after it */
+.lu-root .lu-dialog :is(.lu-dialog__text, .lu-dialog__ask-text) { z-index: 2; }
+.lu-root .lu-dialog :is(.lu-dialog__text, .lu-dialog__ask-text) .lu-w { white-space: nowrap; }
+.lu-root .lu-dialog :is(.lu-dialog__text, .lu-dialog__ask-text) .lu-c { opacity: 0; }
+.lu-root .lu-dialog :is(.lu-dialog__text, .lu-dialog__ask-text) .lu-c.is-on { opacity: 1; }
+
+/* the ▼ mark bobs one art px while the reader may go on; the last line's ◆ breathes */
+.lu-root .lu-dialog .lu-dialog__next { z-index: 3; opacity: 0; }
+.lu-root .lu-dialog .lu-dialog__next.is-on { opacity: 1; }
+.lu-root .lu-dialog .lu-dialog__next .lu-end { display: none; }
+.lu-root .lu-dialog .lu-dialog__next.is-last .lu-arrow { display: none; }
+.lu-root .lu-dialog .lu-dialog__next.is-last .lu-end { display: block; }
+.lu-root .lu-dialog.is-open .lu-dialog__next.is-on:not(.is-last) .lu-arrow { animation: lu-g-bob 0.9s infinite; }
+.lu-root .lu-dialog.is-open .lu-dialog__next.is-on.is-last .lu-end { animation: lu-dlg-breathe 1.6s infinite; }
+@keyframes lu-dlg-breathe {
+  0%, 24.9% { opacity: 1; }
+  25%, 49.9% { opacity: 0.72; }
+  50%, 74.9% { opacity: 0.45; }
+  75%, 100% { opacity: 0.72; }
+}
+
+/* the name plate on the top rim, over the window's rim and ornaments; no speaker → no plate */
+.lu-root .lu-dialog .lu-dialog__name { z-index: 4; }
+.lu-root .lu-dialog .lu-dialog__name.is-empty { display: none; }
+/* the name in capitals (English: the DOM keeps the name as written; CJK has no case) */
+.lu-root .lu-dialog .lu-dialog__speaker.tx:not(.cjk) { text-transform: uppercase; }
+
+/* ------------------------------------------------------------------------------------------ */
+/* Choices: an XS window above the window's right end                                          */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-dialog .lu-dialog__choices {
+  z-index: 3;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(var(--px) * 2));
+  transition: opacity 0.12s steps(2, end), transform 0.12s steps(2, end), visibility 0s linear 0.12s;
+}
+.lu-root .lu-dialog .lu-dialog__choices.is-on {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.16s steps(2, end), transform 0.16s steps(2, end), visibility 0s;
+}
+.lu-root .lu-dialog .lu-dialog__choices .lu-dialog__art,
+.lu-root .lu-dialog .lu-dialog__choices .lu-dialog__art * { pointer-events: none; }
+.lu-root .lu-dialog .lu-choice { cursor: var(--lu-cursor-pointer, pointer); }
+.lu-root .lu-dialog .lu-choice__label { color: var(--g-tx2); }
+.lu-root .lu-dialog .lu-dialog__choices.is-armed .lu-choice.is-sel .lu-choice__label { color: var(--g-sel); }
+/* G's keycap F (HUD.js createKeycaps), one element the module puts on the chosen row's right end
+   (DialogBox._placeKey); over the rows, under nothing; a click on it falls through to its row */
+.lu-root .lu-dialog .lu-choice__key { position: absolute; z-index: 4; display: flex; align-items: center; pointer-events: none; }
+/* Locked answers (DialogBox.choiceQuiet: a press restarts the quiet) show no selection: the band,
+   the gem cursor and the keycap are hidden, every label alike. When the list arms they fade in, two
+   steps in 0.12 s; then the band and the cursor follow the chosen row at once. A press within
+   DialogBox.choiceReact of that locks the list again: the look goes at once (no fade). */
+.lu-root .lu-dialog .lu-dialog__choices:not(.is-armed) :is(.lu-choice__band, .lu-choice__cursor, .lu-choice__key) { opacity: 0; visibility: hidden; }
+.lu-root .lu-dialog .lu-dialog__choices.is-armed :is(.lu-choice__band, .lu-choice__cursor, .lu-choice__key) { opacity: 1; transition: opacity 0.12s steps(2, end); }
+/* the selection band and the gem cursor on the chosen row only; the cursor nudges while it can move */
+.lu-root .lu-dialog .lu-choice:not(.is-sel) .lu-choice__band,
+.lu-root .lu-dialog .lu-choice:not(.is-sel) .lu-choice__cursor { visibility: hidden; }
+.lu-root .lu-dialog.is-open .lu-dialog__choices.is-on.is-armed .lu-choice.is-sel .lu-choice__cursor { animation: lu-g-nudge 0.8s infinite; }
+/* a Space or a window click on armed answers picks nothing: the keycap hops one art px, twice (two
+   keyframe names in turn, so a nudge right after another starts over) */
+.lu-root .lu-dialog .lu-dialog__choices.is-armed .lu-choice__key.is-nudge-a { animation: lu-dlg-key-hop-a 0.4s 1 both; }
+.lu-root .lu-dialog .lu-dialog__choices.is-armed .lu-choice__key.is-nudge-b { animation: lu-dlg-key-hop-b 0.4s 1 both; }
+@keyframes lu-dlg-key-hop-a {
+  0%, 24.9% { translate: 0 calc(var(--px) * -1); }
+  25%, 49.9% { translate: 0 0; }
+  50%, 74.9% { translate: 0 calc(var(--px) * -1); }
+  75%, 100% { translate: 0 0; }
+}
+@keyframes lu-dlg-key-hop-b {
+  0%, 24.9% { translate: 0 calc(var(--px) * -1); }
+  25%, 49.9% { translate: 0 0; }
+  50%, 74.9% { translate: 0 calc(var(--px) * -1); }
+  75%, 100% { translate: 0 0; }
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Interaction prompt                                                                           */
+/* ------------------------------------------------------------------------------------------ */
+
+/* Over the world's overlays (z 4): the area banner and the announcer (3), barks and emotes (1), the
+   HUD (2) — a key hint the player needs is never covered by them; under the toasts (5), the title
+   (6), the world map, journal, tactics panel and death screen (7). It is hidden during dialog (same
+   z as the dialog) and while the title screen is up. Story's barks read `.lu-prompt.is-on`'s box to
+   keep clear of it (Emotes). */
+.lu-root--title .lu-prompt,
+.lu-root--dialog .lu-prompt {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.2s steps(2, end), visibility 0s linear 0.2s;
+}
+.lu-root .lu-prompt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  will-change: transform;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s steps(2, end), visibility 0s linear 0.2s;
+}
+.lu-root .lu-prompt.is-on.is-inview { opacity: 1; visibility: visible; transition: opacity 0.16s steps(2, end), visibility 0s; }
+/* the projected point is (0, 0): the cartouche and the bubble hang above it (InteractPrompt._layout) */
+.lu-root .lu-prompt .lu-prompt__anchor,
+.lu-root .lu-prompt .lu-prompt__inner { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.lu-root .lu-prompt .lu-prompt__label:empty { display: none; }
+/* pops up 3 art px in steps; the bubble bobs one art px and its dots blink in turn */
+.lu-root .lu-prompt.is-on.is-inview .lu-prompt__inner { animation: lu-prompt-pop 0.18s steps(3, end) both; }
+.lu-root .lu-prompt.is-on.is-inview .lu-prompt__bubble { animation: lu-prompt-bob 1.5s infinite; }
+.lu-root .lu-prompt .lu-prompt__dot { opacity: 0; }
+.lu-root .lu-prompt.is-on.is-inview .lu-prompt__dot { animation: lu-prompt-dot 1.5s infinite; }
+.lu-root .lu-prompt.is-on.is-inview .lu-prompt__dot2 { animation-delay: 0.18s; }
+.lu-root .lu-prompt.is-on.is-inview .lu-prompt__dot3 { animation-delay: 0.36s; }
+@keyframes lu-prompt-pop {
+  0% { opacity: 0; transform: translateY(calc(var(--px) * 3)); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes lu-prompt-bob {
+  0%, 49.9% { transform: none; }
+  50%, 100% { transform: translateY(calc(var(--px) * -1)); }
+}
+@keyframes lu-prompt-dot {
+  0%, 72.9% { opacity: 0; }
+  73%, 100% { opacity: 0.75; }
+}

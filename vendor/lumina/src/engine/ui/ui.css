@@ -1,0 +1,68 @@
+/*
+ * Luminati UI — the pixel UI's root (docs/specs/PIXEL_UI.md §3), after mockup G · Gilded Today.
+ *
+ * Every component builds its art on canvases in art pixels and sets its words in the type roles
+ * (layout/layout.js, layout/type.js); their shared rules — G's palette tokens, the layers, the text
+ * rules per language, the edge filters, the idle motion — are layout/base.css, each component's own
+ * rules its stylesheet (docs/specs/PIXEL_UI.md §8): dialog.css (DialogBox, InteractPrompt), hud.css
+ * (HUD, keycaps, toasts, Banner, Fader, DebugPanel), title.css (TitleScreen), map.css (Minimap,
+ * WorldMap); combat levels add combat.css and worldfx.css (UI.enableCombat), story levels story.css
+ * (UI.useStoryUI), the party party.css (UI.usePartyUI).
+ *
+ * Layering inside #luminati-ui (z-index): prompt 1 · hud 2 (minimap inside) · banner 3 · dialog 4 ·
+ * toasts 5 (the HUD's, but a sibling of .lu-hud, whose z-index makes it a stacking context) ·
+ * title 6 · world map 7 · fader 8 · debug 9.
+ * Combat levels add: world labels 1 (before the prompt) · vitals, skills, loot and boss bar inside
+ * the hud · announcer 3 · death screen 7. Story levels add: emotes 1 · letterbox + skip hint 2
+ * (before the hud) · screen flash 2 (before the letterbox) · journal 7 · end card 7 (a translucent
+ * veil) · title card 8 (after the fader). The party adds its frames inside the hud and the
+ * tactics panel at 7.
+ *
+ * This file holds the root itself: where it sits, its own font (the body role of the page's
+ * language: UI.js writes `--lu-font` and `--lu-font-w` from layout/type.js fontTokens on every
+ * scale change; the defaults are in base.css), photo mode and reduced motion.
+ */
+
+/* the mouse cursors (art/cursors.js; UI.js sets them on the page): G's gilt arrow everywhere, the
+   gauntlet (--lu-cursor-pointer) where a click acts */
+.lu-cursors { cursor: var(--lu-cursor, auto); }
+
+.lu-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--lu-font);
+  font-weight: var(--lu-font-w);
+  color: var(--g-tx1);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  -webkit-user-select: none;
+  font-kerning: normal;
+}
+.lu-root--contained { position: absolute; }
+.lu-root *, .lu-root *::before, .lu-root *::after { box-sizing: border-box; }
+
+/* Photo mode: everything but the fader (and a combat death screen) fades away. */
+.lu-root.lu-root--hidden > :not(.lu-fader, .lu-death) {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none !important;
+  transition: opacity 0.4s var(--lu-ease), visibility 0s linear 0.4s;
+}
+
+/* A keycap row's separator ('/' between two keys, HUD.js createKeycaps): dimmed, as the legend has
+   always drawn it (hud.css sets its face, size and colour). */
+.lu-root .lu-key-sep { opacity: 0.55; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .lu-root *, .lu-root *::before, .lu-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

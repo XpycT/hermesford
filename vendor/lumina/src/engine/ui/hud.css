@@ -1,0 +1,444 @@
+/*
+ * Luminati UI — the HUD (location plate, clock, controls legend, toasts, keycaps), the area banner, the
+ * fader and the debug panel (HUD.js, Banner.js, Fader.js, DebugPanel.js), in mockup G's pixel art
+ * (docs/specs/PIXEL_UI.md §5). The panels are groups of canvases and text placed in art px
+ * (layout/layout.js, layout/base.css); this file holds their states and motion — in whole art
+ * pixels and hard steps (`steps()`), opacity fades kept smooth — and A's keycap drawn in CSS.
+ * Rules are scoped under .lu-root so they win over base.css's `.lu-root .g` whatever the import order.
+ */
+
+/* ------------------------------------------------------------------------------------------ */
+/* Area banner (Banner.js): G's level-up card — a stage over the root holding one 'tc' group    */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-banner {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  /* own compositor layer from the start: promoting it lazily (when the fade-out begins) cost a
+     one-time GPU stall */
+  will-change: opacity;
+}
+.lu-root .lu-banner.is-in { opacity: 1; visibility: visible; }
+.lu-root .lu-banner.is-out {
+  opacity: 1;
+  visibility: visible;
+  animation: lu-hud-out 1.1s linear both, lu-hud-rise 1.1s steps(3, jump-none) both;
+}
+/* the reveal: the shade fades in, the rules open from the gem outward in steps, the title settles
+   by two art px, the subtitle follows */
+.lu-root .lu-banner.is-in .lu-banner__shade { animation: lu-hud-fade 0.6s linear both; }
+.lu-root .lu-banner.is-in .lu-banner__rule { animation: lu-hud-reveal 0.64s steps(8, jump-end) 0.15s both; }
+.lu-root .lu-banner.is-in .lu-banner__gem { animation: lu-hud-fade 0.2s steps(2, jump-end) 0.1s both; }
+.lu-root .lu-banner.is-in .lu-banner__title { animation: lu-hud-fade 0.7s linear 0.1s both, lu-hud-settle 0.5s steps(2, jump-end) 0.1s both; }
+.lu-root .lu-banner.is-in .lu-banner__sub { animation: lu-hud-fade 0.6s linear 0.6s both; }
+@keyframes lu-hud-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lu-hud-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes lu-hud-reveal { from { clip-path: inset(0 50%); } to { clip-path: inset(0 0); } }
+@keyframes lu-hud-settle { from { translate: 0 calc(var(--px) * 2); } to { translate: 0 0; } }
+@keyframes lu-hud-rise { from { translate: 0 0; } to { translate: 0 calc(var(--px) * -2); } }
+
+/* ------------------------------------------------------------------------------------------ */
+/* HUD                                                                                          */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.5s var(--lu-ease), visibility 0s;
+}
+.lu-root .lu-hud.is-hidden,
+.lu-root .lu-toasts.is-hidden { opacity: 0; visibility: hidden; transition: opacity 0.5s var(--lu-ease), visibility 0s linear 0.5s; }
+
+/* Place plate (top-left; G's placePlate). A new place slides in from 6 art px to the left in steps. */
+.lu-root .lu-loc { transition: opacity 0.45s var(--lu-ease), translate 0.42s steps(6, jump-end); }
+.lu-root .lu-loc.is-empty { opacity: 0; }
+.lu-root .lu-loc.is-swap { opacity: 0; translate: calc(var(--px) * -6) 0; transition: none; }
+
+/* Clock (top-right; G's clock) */
+.lu-root .lu-clock { transition: opacity 0.45s var(--lu-ease); }
+
+/* While a dialogue is open the HUD dims to G's .55 (the dialogue owns the screen); the legend steps
+   aside (the dialogue window widens over that corner) */
+.lu-root.lu-root--dialog .lu-loc:not(.is-empty),
+.lu-root.lu-root--dialog .lu-clock { opacity: 0.55; }
+
+/* Controls legend (bottom-left): an XS window, A's keycaps and the labels */
+.lu-root .lu-hud .lu-help {
+  transition: opacity 0.35s var(--lu-ease), translate 0.3s steps(6, jump-end), visibility 0s;
+}
+.lu-root .lu-hud .lu-help.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  translate: calc(var(--px) * -6) 0;
+  transition: opacity 0.3s var(--lu-ease), translate 0.3s steps(6, jump-end), visibility 0s linear 0.4s;
+}
+.lu-root .lu-hud .lu-help.is-empty { display: none; }
+/* very short windows: the legend would cover the place plate */
+@media (max-height: 540px) { .lu-root .lu-hud .lu-help { display: none; } }
+.lu-root.lu-root--dialog .lu-hud .lu-help:not(.is-hidden) { opacity: 0; translate: calc(var(--px) * -6) 0; }
+.lu-root .lu-help__grid,
+.lu-root .lu-help__foot { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: visible; }
+.lu-root .lu-help .lu-keys { position: absolute; display: flex; justify-content: flex-end; align-items: center; }
+.lu-root .lu-help .lu-help__foot-keys { justify-content: flex-start; }
+
+/* The folded legend's tab (HUD.js `_renderHelpTab`): [H] Show controls at the bottom left while the
+   legend is hidden. It comes in once the legend has stepped aside and goes at once when the legend
+   opens; it steps aside wherever the legend does (dialogue, short windows; the cutscene, the title
+   and setHudVisible(false) hide every HUD panel; combat.css: the boss bar, results, death). */
+.lu-root .lu-hud .lu-help-tab {
+  transition: opacity 0.3s var(--lu-ease) 0.25s, translate 0.3s steps(6, jump-end) 0.25s, visibility 0s linear 0.25s;
+}
+.lu-root .lu-hud .lu-help-tab.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  translate: calc(var(--px) * -6) 0;
+  transition: opacity 0.15s var(--lu-ease), translate 0.15s steps(3, jump-end), visibility 0s linear 0.15s;
+}
+.lu-root .lu-hud .lu-help-tab.is-empty { display: none; }
+@media (max-height: 540px) { .lu-root .lu-hud .lu-help-tab { display: none; } }
+.lu-root.lu-root--dialog .lu-hud .lu-help-tab:not(.is-hidden) { opacity: 0; translate: calc(var(--px) * -6) 0; }
+.lu-root .lu-help-tab .lu-keys { position: absolute; display: flex; justify-content: flex-start; align-items: center; }
+
+/* UI.setHudVisible(false): the HUD panels step aside, the toasts (a sibling of .lu-hud) stay. */
+.lu-root--nohud .lu-hud > :not(.lu-toasts) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.35s var(--lu-ease), visibility 0s linear 0.35s !important;
+}
+
+/* While the title screen is up the HUD and its toasts stay hidden (the prompt: dialog.css). */
+.lu-root--title .lu-hud,
+.lu-root--title .lu-toasts {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.35s var(--lu-ease), visibility 0s linear 0.35s;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Keycaps (createKeycaps): A's keycap at the root's art pixel. The kbd's box is the cap's face  */
+/* (its width − 2 by 9 art px); the four 1-art-px shadows are the ink outline with its notched   */
+/* corners; the layers of the background the lit top row, the lip, the shade and its ink ends.   */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-keys { display: inline-flex; align-items: center; gap: var(--px); white-space: nowrap; vertical-align: middle; }
+/* (kbd.lu-key: more specific than the stylesheets that size today's keycaps in their context,
+   `.lu-skip .lu-key { font-size: … }` …, so the cap stays A's cap everywhere) */
+.lu-root kbd.lu-key {
+  box-sizing: border-box;
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex: none;
+  height: calc(var(--px) * 9);
+  min-width: calc(var(--px) * 9);
+  margin: var(--px);
+  padding: 0 calc(var(--px) * 2);
+  border: 0;
+  border-radius: 0;
+  color: var(--g-kink);
+  /* a name written straight into the kbd (not through createKeycaps): its line box 2 art px shorter
+     than the face, so the capitals land on the face's rows 2–6 as with .lu-key__t */
+  font: 400 calc(var(--px) * 8) / calc(var(--px) * 7) Tiny5, monospace;
+  letter-spacing: 0;
+  text-shadow: none;
+  transform: none;
+  background:
+    linear-gradient(var(--g-kf0), var(--g-kf0)) var(--px) 0 / calc(100% - var(--px) * 2) var(--px) no-repeat,
+    linear-gradient(var(--g-kf2), var(--g-kf2)) var(--px) calc(100% - var(--px)) / calc(100% - var(--px) * 2) var(--px) no-repeat,
+    linear-gradient(var(--g-kf3), var(--g-kf3)) var(--px) 100% / calc(100% - var(--px) * 2) var(--px) no-repeat,
+    linear-gradient(var(--g-ink0), var(--g-ink0)) 0 100% / 100% var(--px) no-repeat,
+    var(--g-kf1);
+  box-shadow:
+    0 calc(var(--px) * -1) 0 var(--g-ink0),
+    0 var(--px) 0 var(--g-ink0),
+    calc(var(--px) * -1) 0 0 var(--g-ink0),
+    var(--px) 0 0 var(--g-ink0);
+}
+.lu-root kbd.lu-key--wide { min-width: calc(var(--px) * 9); }
+/* the name: Tiny5 (8 art px), its line box from the cap's top row so the capitals sit on rows 2–6 */
+.lu-root .lu-key__t {
+  position: relative;
+  top: calc(var(--px) * -1);
+  display: block;
+  font: 400 calc(var(--px) * 8) / calc(var(--px) * 9) Tiny5, monospace;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre;
+  font-kerning: none;
+  font-synthesis: none;
+  color: var(--g-kink);
+}
+/* a number key: Jersey 10 at half size (no digit in Tiny5), its cap centred on the same rows */
+.lu-root .lu-key--num .lu-key__t {
+  top: round(nearest, calc(var(--px) * 3.5 - var(--fpx) * 9), var(--lu-dpx, 1px));
+  font: 400 calc(var(--fpx) * 56 / 3) / calc(var(--fpx) * 18) "Jersey 10", monospace;
+}
+.lu-root[data-lu-scale="crisp"] .lu-key__t { filter: url(#lu-crisp); }
+/* arrow keys: A's drawn arrow (7 × 7) on the face's top rows; the tilde drawn (6 × 7) */
+.lu-root kbd.lu-key--arrow,
+.lu-root kbd.lu-key--glyph { padding: 0; justify-content: center; }
+.lu-root .lu-key--arrow svg { display: block; width: calc(var(--px) * 7); height: calc(var(--px) * 7); fill: var(--g-kink); }
+.lu-root .lu-key--glyph svg { display: block; width: calc(var(--px) * 6); height: calc(var(--px) * 7); fill: var(--g-kink); }
+.lu-root .lu-key-sep {
+  font: 400 calc(var(--px) * 8) / calc(var(--px) * 9) Tiny5, monospace;
+  color: var(--g-tx2);
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Toasts (top, between the corner panels): a child of the root beside .lu-hud                  */
+/* (HUD.toastElement), so z 5 paints them over the banner and the dialog. Each one the title's   */
+/* plate band, sized to its text, placed by HUD._layoutToasts in art px from the root's corner    */
+/* (the stack's frame: shrunk with the corner groups below 1024 × 600). A toast that moves (the   */
+/* banner's card gone, one above it expired) steps to its new place in whole art px.              */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-toasts {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 5;
+  pointer-events: none;
+  transform-origin: 0 0;
+  transition: opacity 0.5s var(--lu-ease), visibility 0s;
+}
+.lu-root[data-lu-scale="shrunk"] .lu-toasts { scale: var(--shrink-corner); }
+.lu-root .lu-toast {
+  position: absolute;
+  left: 0;
+  top: calc(var(--px) * 10);
+  opacity: 0;
+  translate: 0 calc(var(--px) * -3);
+  transition: opacity 0.3s var(--lu-ease), translate 0.3s steps(3, jump-end), top 0.3s steps(3, jump-end), left 0.3s steps(3, jump-end);
+}
+.lu-root .lu-toast.is-on { opacity: 1; translate: 0 0; }
+.lu-root .lu-toast.is-off {
+  opacity: 0;
+  translate: 0 calc(var(--px) * -2);
+  transition: opacity 0.45s var(--lu-ease), translate 0.45s steps(2, jump-end), top 0.3s steps(3, jump-end), left 0.3s steps(3, jump-end);
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Fader                                                                                        */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-fader {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
+  transition-duration: 0.6s;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Debug panel (themed lil-gui) + stats: a column 146 art px wide under the clock, at the right   */
+/* margin (10 art px), in art px like the rest of the UI (the root's --px / --fpx), so it scales   */
+/* with it and its pixel faces stay on their grids: Jersey 10 at the line role's size for the     */
+/* rows, the numbers and the colour codes, the panel's title in the name role (Jersey 15          */
+/* capitals), the folders' titles as G's section headings (Tiny5 tracked capitals). A developer    */
+/* tool: English only.                                                                            */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-debug {
+  position: absolute;
+  right: calc(var(--px) * 10);
+  top: var(--lu-debug-top, calc(var(--px) * 58));
+  bottom: calc(var(--px) * 10);
+  z-index: 9;
+  width: calc(var(--px) * 146);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--px) * 5);
+  pointer-events: none;
+  transition: opacity 0.25s var(--lu-ease), translate 0.3s steps(3, jump-end), visibility 0s;
+}
+.lu-root .lu-debug > * { pointer-events: auto; }
+.lu-root .lu-debug.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  translate: calc(var(--px) * 6) 0;
+  transition: opacity 0.2s var(--lu-ease), translate 0.25s steps(3, jump-end), visibility 0s linear 0.25s;
+}
+.lu-root .lu-debug.is-hidden > * { pointer-events: none; }
+
+/* The stats box: an XS frame (DebugStats paints it to the box's size in art px), Jersey numbers,
+   Tiny5 labels, the fps graph one art px per sample row. A developer tool: English only. */
+.lu-root .lu-stats {
+  position: relative;
+  z-index: 0;
+  flex: none;
+  box-sizing: border-box;
+  height: calc(var(--px) * 76);
+  padding: calc(var(--px) * 6) calc(var(--px) * 8) 0;
+  color: var(--g-tx1);
+  line-height: 1;
+}
+.lu-root .lu-stats > canvas.g { pointer-events: none; }
+.lu-root .lu-stats > :not(canvas.g) { position: relative; z-index: 1; }
+.lu-root .lu-stats__head { display: flex; align-items: flex-end; gap: calc(var(--px) * 3); height: calc(var(--px) * 14); }
+.lu-root .lu-stats__fps {
+  font: 400 calc(var(--fpx) * 27) / calc(var(--fpx) * 23) "Jersey 15", monospace;
+  color: var(--g-heal);
+  min-width: calc(var(--px) * 24);
+  text-shadow: 0 var(--fpx) 0 var(--g-ink0);
+}
+.lu-root .lu-stats__fps.is-mid { color: var(--g-kw); }
+.lu-root .lu-stats__fps.is-low { color: var(--g-hp3); }
+.lu-root .lu-stats__unit {
+  font: 400 calc(var(--px) * 8) / calc(var(--px) * 9) Tiny5, monospace;
+  letter-spacing: var(--px);
+  color: var(--g-g4);
+  padding-bottom: var(--px);
+  text-shadow: 0 var(--px) 0 var(--g-ink0);
+}
+.lu-root .lu-stats__ms {
+  margin-left: auto;
+  font: 400 calc(var(--fpx) * 56 / 3) / calc(var(--fpx) * 18) "Jersey 10", monospace;
+  color: var(--g-tx2);
+  text-shadow: 0 var(--fpx) 0 var(--g-ink0);
+}
+.lu-root .lu-stats__graph {
+  display: block;
+  width: 100%;
+  height: calc(var(--px) * 15);
+  margin: calc(var(--px) * 4) 0;
+  image-rendering: pixelated;
+  box-shadow: 0 calc(var(--px) * -1) 0 var(--g-dm2), 0 var(--px) 0 var(--g-dm2);
+}
+.lu-root .lu-stats__grid { display: grid; grid-template-columns: auto 1fr auto 1fr; column-gap: calc(var(--px) * 4); row-gap: 0; }
+.lu-root .lu-stats__k {
+  font: 400 calc(var(--px) * 8) / calc(var(--px) * 9) Tiny5, monospace;
+  letter-spacing: var(--px);
+  text-transform: uppercase;
+  color: var(--g-g4);
+  text-shadow: 0 var(--px) 0 var(--g-ink0);
+}
+.lu-root .lu-stats__v {
+  text-align: right;
+  padding-right: calc(var(--px) * 3);
+  font: 400 calc(var(--fpx) * 56 / 3) / calc(var(--px) * 9) "Jersey 10", monospace;
+  color: var(--g-tx1);
+  text-shadow: 0 var(--fpx) 0 var(--g-ink0);
+}
+.lu-root[data-lu-scale="crisp"] .lu-stats__fps,
+.lu-root[data-lu-scale="crisp"] .lu-stats__unit,
+.lu-root[data-lu-scale="crisp"] .lu-stats__ms,
+.lu-root[data-lu-scale="crisp"] .lu-stats__k,
+.lu-root[data-lu-scale="crisp"] .lu-stats__v { filter: url(#lu-crisp); }
+
+/* lil-gui in G's family: ink glass, gilt rules, square widgets in whole art px. Its sizes are art
+   px (--px) and its text Jersey 10 at the line role's size (--fpx · 56/3: 10 font px caps), so
+   every face stays on its pixel grid at every --px. */
+.lu-root .lu-debug .lil-gui {
+  --background-color: rgba(9, 12, 27, 0.95);
+  --text-color: var(--g-tx1);
+  --title-background-color: var(--g-ink2);
+  --title-text-color: var(--g-g5);
+  --widget-color: var(--g-ink3);
+  --hover-color: var(--g-ink4);
+  --focus-color: #36416f;
+  --number-color: var(--g-g4);
+  --string-color: var(--g-heal);
+  --font-size: calc(var(--fpx) * 56 / 3);
+  --input-font-size: calc(var(--fpx) * 56 / 3);
+  --font-family: var(--lu-font-j10, "Jersey 10", monospace);
+  --font-family-mono: var(--lu-font-t5, Tiny5, monospace);
+  --padding: calc(var(--px) * 3);
+  --spacing: calc(var(--px) * 2);
+  --widget-height: calc(var(--px) * 10);
+  /* (lil-gui's own is the widget height + 1.25 spacings: half an art px at --px 3) */
+  --title-height: calc(var(--px) * 12);
+  --widget-padding: 0 0 0 calc(var(--px) * 2);
+  --name-width: 46%;
+  --slider-knob-width: var(--px);
+  --slider-input-width: 32%;
+  --slider-input-min-width: calc(var(--px) * 30);
+  --color-input-width: 32%;
+  --color-input-min-width: calc(var(--px) * 30);
+  --widget-border-radius: 0;
+  --folder-indent: calc(var(--px) * 4);
+  --scrollbar-width: calc(var(--px) * 3);
+  --checkbox-size: calc(var(--px) * 7);
+  font-weight: 400;
+  text-shadow: 0 var(--fpx) 0 var(--g-ink0);
+}
+.lu-root .lu-debug .lil-gui.lil-root {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  flex: 0 1 auto;
+  border: var(--px) solid var(--g-g2);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(20, 26, 54, 0.95) 0%, rgba(7, 8, 15, 0.96) 100%);
+  box-shadow: 0 0 0 var(--px) var(--g-ink0), inset 0 var(--px) 0 rgba(232, 207, 138, 0.16);
+}
+.lu-root .lu-debug .lil-gui.lil-root > .lil-children { min-height: 0; }
+.lu-root .lu-debug .lil-gui.lil-root > .lil-children::-webkit-scrollbar-thumb { border-radius: 0; background: var(--g-g2); }
+/* the panel's title: the name role (Jersey 15 at 27 font px, one art px of tracking) in capitals */
+.lu-root .lu-debug .lil-gui.lil-root > .lil-title {
+  height: calc(var(--px) * 15);
+  display: flex;
+  align-items: center;
+  font: 400 calc(var(--fpx) * 27) / calc(var(--px) * 15) var(--lu-font-j15, "Jersey 15", monospace);
+  letter-spacing: calc(var(--fpx) * 2);
+  text-transform: uppercase;
+  color: var(--g-g5);
+  background: linear-gradient(180deg, var(--g-ink3) 0%, var(--g-ink1) 100%);
+  border-bottom: var(--px) solid var(--g-g2);
+}
+/* a folder's title: G's section heading (Tiny5, 8 art px, one art px of tracking, gilt capitals) */
+.lu-root .lu-debug .lil-gui .lil-gui > .lil-title {
+  display: flex;
+  align-items: center;
+  font: 400 calc(var(--px) * 8) / var(--title-height) var(--lu-font-t5, Tiny5, monospace);
+  letter-spacing: var(--px);
+  text-transform: uppercase;
+  color: var(--g-g4);
+}
+/* (the open / closed arrows: lil-gui's own icon font, in the title's colour) */
+.lu-root .lu-debug .lil-gui .lil-title:before { letter-spacing: 0; padding-right: calc(var(--px) * 3); font-size: calc(var(--px) * 9); }
+.lu-root .lu-debug .lil-gui .lil-gui > .lil-title:before { font-size: calc(var(--px) * 7); }
+.lu-root .lu-debug .lil-gui.lil-root > .lil-children > .lil-gui > .lil-title { border-color: rgba(201, 164, 92, 0.22); border-width: var(--px) 0; }
+.lu-root .lu-debug .lil-gui .lil-gui .lil-gui > .lil-children { border-left: var(--px) solid rgba(201, 164, 92, 0.3); }
+.lu-root .lu-debug .lil-gui + .lil-controller { border-top: var(--px) solid rgba(201, 164, 92, 0.22); }
+.lu-root .lu-debug .lil-controller > .lil-name { color: var(--g-tx2); }
+/* the numbers and the colour codes: Jersey 10 (no digit is ever set in Tiny5: PIXEL_UI.md §4) */
+.lu-root .lu-debug .lil-controller.lil-number input,
+.lu-root .lu-debug .lil-controller.lil-color input[type=text] {
+  font-family: var(--lu-font-j10, "Jersey 10", monospace);
+  font-size: calc(var(--fpx) * 56 / 3);
+}
+.lu-root .lu-debug .lil-controller.lil-number .lil-fill {
+  background: linear-gradient(90deg, rgba(201, 164, 92, 0.1), rgba(201, 164, 92, 0.42));
+  border-right-color: var(--g-g5);
+}
+.lu-root .lu-debug .lil-gui input[type=checkbox] { box-shadow: inset 0 0 0 var(--px) rgba(201, 164, 92, 0.35); }
+.lu-root .lu-debug .lil-gui input[type=checkbox]:checked { background: var(--g-g4); color: var(--g-ink0); text-shadow: none; }
+.lu-root .lu-debug .lil-gui .lil-controller button {
+  font-family: var(--lu-font-j10, "Jersey 10", monospace);
+  font-size: calc(var(--fpx) * 56 / 3);
+  color: var(--g-g4);
+  background: linear-gradient(180deg, var(--g-ink4), var(--g-ink3));
+  box-shadow: inset 0 0 0 var(--px) rgba(201, 164, 92, 0.45);
+}
+.lu-root .lu-debug .lil-gui .lil-controller button:hover { background: linear-gradient(180deg, #34407a, var(--g-ink4)); }
+.lu-root .lu-debug .lil-controller.lil-option .lil-display { box-shadow: inset 0 0 0 var(--px) rgba(201, 164, 92, 0.25); }
+/* crisp pixel edges on the text that has no background of its own (the filter needs a transparent
+   ground: it would turn a widget's glass opaque) */
+.lu-root[data-lu-scale="crisp"] .lu-debug .lil-controller > .lil-name,
+.lu-root[data-lu-scale="crisp"] .lu-debug .lil-gui .lil-gui > .lil-title { filter: url(#lu-crisp); }

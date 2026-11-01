@@ -1,0 +1,219 @@
+/*
+ * Luminati party UI (docs/specs/PARTY.md §6, docs/specs/PIXEL_UI.md §5) — the tactics panel
+ * (PartyPanel) and the party's HUD frames (PartyFrames) after mockup G, plus the world map's
+ * "Companion" legend key. Imported by PartyPanel.js and PartyFrames.js only (the party chunk:
+ * `UI.usePartyUI()` once someone joins), never by UI.js or ui.css, so a game nobody joins loads
+ * none of it.
+ *
+ * Both are pixel art on the UI root's scale (layout/base.css: --px, --fpx, --shrink, the G palette
+ * as --g-<token>): canvases and text placed in art px by layout/layout.js and layout/type.js, so
+ * this file holds only what changes with a state — which canvas of a pair shows, a text's colour —
+ * and the motion, in whole art pixels and hard steps. Text colours a state changes come from here
+ * (the elements carry no inline colour); the rest is inline.
+ *
+ * A member's colour comes in as `--lu-member` ('#rrggbb', checked by `safeColor`) and
+ * `--lu-member-text` (its name: lightened where the colour is too dark to read).
+ *
+ * Layering inside #luminati-ui: the panel 7 (the journal's and the world map's layer; the game never
+ * opens two of them) · the frames inside the HUD (z 2), so they hide with it.
+ */
+
+/* ------------------------------------------------------------------------------------------ */
+/* Shared                                                                                       */
+/* ------------------------------------------------------------------------------------------ */
+
+/* today's capitals (English; the text stays as written, CJK has no case) */
+.lu-root .tx.lu-party-caps { text-transform: uppercase; }
+/* a structural element: its children are placed in art px against the box it sits in */
+.lu-root .lu-party__wrap { display: contents; }
+/* text for a screen reader (and the tests' textContent), not drawn */
+.lu-root .lu-party__vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Tactics panel                                                                                */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-party {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s steps(3, end), visibility 0s linear 0.2s;
+}
+.lu-root .lu-party.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.2s steps(3, end), visibility 0s;
+}
+/* the HUD hides under the panel (G: it covers all of it but a sliver of the top edge) */
+.lu-root:has(> .lu-party.is-open) > :is(.lu-hud, .lu-minimap) {
+  opacity: 0;
+  transition: opacity 0.12s steps(2, end);
+}
+/* the window rises 4 art px into place in two steps (`translate`: the shrink is `scale`) */
+.lu-root .lu-party .lu-party__window {
+  translate: 0 calc(var(--px) * 4);
+  transition: translate 0.2s steps(2, end);
+}
+.lu-root .lu-party.is-open .lu-party__window { translate: 0 0; }
+/* the frames' canvases take no clicks: a click on the window's margin is a click outside it */
+.lu-root .lu-party canvas.g.frame,
+.lu-root .lu-party canvas.g.orn { pointer-events: none; }
+.lu-root .lu-party .lu-party__veil { pointer-events: auto; }
+
+/* the right column: scrolls only when the window is too short for it (the offset parent of the
+   cards and rows, which PartyPanel scrolls into view) */
+.lu-root .lu-party__body {
+  position: absolute;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-g2) transparent;
+}
+
+/* a name too wide for one line beside the portrait breaks anywhere (two lines; more: cut) */
+.lu-root .tx.wrap.lu-party__name { overflow-wrap: anywhere; }
+
+/* --- the member's slots (`.lu-party__tab`: a member; EMPTY) ---------------------------------- */
+.lu-root .lu-party__tab,
+.lu-root .lu-party__slot { position: absolute; }
+.lu-root .lu-party__tab { cursor: var(--lu-cursor-pointer, pointer); }
+.lu-root .lu-party__tab .lu-party__tab-frame--on { display: none; }
+.lu-root .lu-party__tab.is-on .lu-party__tab-frame--on { display: block; }
+.lu-root .lu-party__tab.is-on .lu-party__tab-frame--off { display: none; }
+.lu-root .lu-party__tab:not(.is-on) .lu-party__tab-sprite { opacity: 0.6; }
+.lu-root .lu-party__tab:not(.is-on):hover .lu-party__tab-sprite { opacity: 0.85; }
+.lu-root .lu-party__tab-name { color: var(--lu-member-text, var(--g-tx1)); }
+
+/* --- the note box ------------------------------------------------------------------------------- */
+.lu-root .lu-party__desc { position: absolute; }
+
+/* --- preset cards: a dim card; gold-cornered while focused; the member's own gold and ✓ --------- */
+.lu-root .lu-party__card { position: absolute; cursor: var(--lu-cursor-pointer, pointer); }
+.lu-root .lu-party__card .lu-party__card-frame--focus,
+.lu-root .lu-party__card .lu-party__card-frame--sel,
+.lu-root .lu-party__card .lu-party__card-mark,
+.lu-root .lu-party__card .lu-party__card-icon--on,
+.lu-root .lu-party__card .lu-party__card-cursor,
+.lu-root .lu-party__card .lu-party__card-flash { display: none; }
+.lu-root .lu-party__card.is-current .lu-party__card-frame--sel,
+.lu-root .lu-party__card.is-current .lu-party__card-mark,
+.lu-root .lu-party__card.is-current .lu-party__card-icon--on { display: block; }
+.lu-root .lu-party__card.is-current .lu-party__card-frame--dim,
+.lu-root .lu-party__card.is-current .lu-party__card-icon--off { display: none; }
+.lu-root .lu-party__presets.is-focus .lu-party__card.is-focus:not(.is-current) .lu-party__card-frame--focus,
+.lu-root .lu-party__card:not(.is-current):hover .lu-party__card-frame--focus { display: block; }
+.lu-root .lu-party__presets.is-focus .lu-party__card.is-focus:not(.is-current) .lu-party__card-frame--dim,
+.lu-root .lu-party__card:not(.is-current):hover .lu-party__card-frame--dim { display: none; }
+.lu-root .lu-party__presets.is-focus .lu-party__card.is-focus .lu-party__card-cursor { display: block; }
+.lu-root .lu-party__card-label { color: var(--g-tx1); }
+.lu-root .lu-party__card.is-current .lu-party__card-label { color: var(--g-g5); }
+.lu-root .lu-party__card-help { color: var(--g-tx3); }
+.lu-root .lu-party__card.is-current .lu-party__card-help,
+.lu-root .lu-party__presets.is-focus .lu-party__card.is-focus .lu-party__card-help { color: var(--g-tx1); }
+/* picked: one flash in three steps (two identical keyframes, so a second pick restarts it) */
+.lu-root .lu-party__card.is-picked-a .lu-party__card-flash { display: block; animation: lu-party-pick-a 0.36s steps(3, end) both; }
+.lu-root .lu-party__card.is-picked-b .lu-party__card-flash { display: block; animation: lu-party-pick-b 0.36s steps(3, end) both; }
+@keyframes lu-party-pick-a { from { opacity: 1; } to { opacity: 0; } }
+@keyframes lu-party-pick-b { from { opacity: 1; } to { opacity: 0; } }
+
+/* --- rule rows: icon LABEL ◀ value ▶ hint; the focused one on A's band with the cursor ---------- */
+.lu-root .lu-party__rules { margin: 0; padding: 0; list-style: none; }
+.lu-root .lu-party__row { position: absolute; cursor: var(--lu-cursor-pointer, pointer); list-style: none; }
+.lu-root .lu-party__row .lu-party__band,
+.lu-root .lu-party__row .lu-party__cursor,
+.lu-root .lu-party__row .lu-party__icon--on,
+.lu-root .lu-party__row .lu-party__arrow-on { display: none; }
+.lu-root .lu-party__row.is-sel .lu-party__band,
+.lu-root .lu-party__row.is-sel .lu-party__cursor,
+.lu-root .lu-party__row.is-sel .lu-party__icon--on,
+.lu-root .lu-party__row.is-sel .lu-party__arrow-on { display: block; }
+.lu-root .lu-party__row.is-sel .lu-party__icon--off,
+.lu-root .lu-party__row.is-sel .lu-party__arrow-off { display: none; }
+.lu-root .lu-party__row:not(.is-sel):hover .lu-party__band { display: block; opacity: 0.45; }
+.lu-root .lu-party__label { color: var(--g-g4); }
+.lu-root .lu-party__row.is-sel .lu-party__label { color: var(--g-g5); }
+.lu-root .lu-party__value-t { color: var(--g-tx1); }
+.lu-root .lu-party__row.is-sel .lu-party__value-t { color: var(--g-sel); }
+.lu-root .lu-party__hint { color: var(--g-tx3); }
+.lu-root .lu-party__row.is-sel .lu-party__hint { color: var(--g-tx1); }
+.lu-root .lu-party__arrow { position: absolute; cursor: var(--lu-cursor-pointer, pointer); }
+.lu-root .lu-party__arrow:hover .lu-party__arrow-on { display: block; }
+.lu-root .lu-party__arrow:hover .lu-party__arrow-off { display: none; }
+/* a value changed: it slides in 2 art px in two steps (left / right; two identical keyframes each) */
+.lu-root .lu-party__value-t.is-in-r { animation: lu-party-in-r 0.16s steps(2, end) both; }
+.lu-root .lu-party__value-t.is-in-r2 { animation: lu-party-in-r2 0.16s steps(2, end) both; }
+.lu-root .lu-party__value-t.is-in-l { animation: lu-party-in-l 0.16s steps(2, end) both; }
+.lu-root .lu-party__value-t.is-in-l2 { animation: lu-party-in-l2 0.16s steps(2, end) both; }
+@keyframes lu-party-in-r { from { translate: calc(var(--px) * 2) 0; } to { translate: 0 0; } }
+@keyframes lu-party-in-r2 { from { translate: calc(var(--px) * 2) 0; } to { translate: 0 0; } }
+@keyframes lu-party-in-l { from { translate: calc(var(--px) * -2) 0; } to { translate: 0 0; } }
+@keyframes lu-party-in-l2 { from { translate: calc(var(--px) * -2) 0; } to { translate: 0 0; } }
+/* (closed: the idle motion stops) */
+.lu-root .lu-party:not(.is-open) .g.nudge { animation-play-state: paused; }
+
+/* ------------------------------------------------------------------------------------------ */
+/* Party frames (HUD, under the vitals / the location plate)                                    */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-root .lu-pframes {
+  /* placed by PartyFrames (under its anchor, in CSS px); a 'tl' group otherwise */
+  left: calc(var(--px) * 10);
+  top: calc(var(--px) * 46);
+  transition: opacity 0.4s steps(4, end), visibility 0s;
+}
+.lu-root .lu-pframes.is-empty { display: none; }
+.lu-root .lu-pframes.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s steps(4, end), visibility 0s linear 0.4s;
+}
+.lu-root.lu-root--dialog .lu-pframes:not(.is-hidden) { opacity: 0.55; }
+
+.lu-root .lu-pframe { position: absolute; left: 0; }
+.lu-root .lu-pframe .lu-pframe__bars { display: contents; }
+/* the states: down (DOWN in place of class · tactic, the gem dusk, the bars dim), low HP (the
+   empty part of the HP bar blinking red), fighting (the gem blinking bright) */
+.lu-root .lu-pframe .lu-pframe__down,
+.lu-root .lu-pframe .lu-pframe__chip--down,
+.lu-root .lu-pframe .lu-pframe__glow,
+.lu-root .lu-pframe .lu-pframe__low { display: none; }
+.lu-root .lu-pframe.is-down .lu-pframe__down,
+.lu-root .lu-pframe.is-down .lu-pframe__chip--down { display: block; }
+.lu-root .lu-pframe.is-down .lu-pframe__sub { display: none; }
+.lu-root .lu-pframe.is-down .lu-pframe__name { color: var(--g-tx3) !important; }
+.lu-root .lu-pframe.is-down .lu-pframe__bar,
+.lu-root .lu-pframe.is-down .lu-pframe__num { opacity: 0.4; }
+.lu-root .lu-pframe.is-low .lu-pframe__low { display: block; }
+.lu-root .lu-pframe.is-fighting .lu-pframe__glow { display: block; }
+/* (hidden HUD / title / photo: the blinking stops) */
+.lu-root .lu-pframes.is-hidden .g.breathe,
+.lu-root.lu-root--title .lu-pframes .g.breathe { animation-play-state: paused; }
+/* short or wide windows: the compact strip (PartyFrames lays out the HP bar alone there) */
+@media (max-height: 680px), (min-aspect-ratio: 2/1) {
+  .lu-root .lu-pframe__bar--mp,
+  .lu-root .lu-pframe__num--mp { display: none; }
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* World map: the "Companion" legend key (WorldMap adds the row while the map shows the party)  */
+/* ------------------------------------------------------------------------------------------ */
+
+.lu-wm-key--party {
+  border-radius: 50%;
+  background: #3fcfae;
+  box-shadow: 0 0 0 2px #e6fff7, 0 0 0 3.5px rgba(20, 14, 6, 0.9);
+  transform: scale(0.62);
+}

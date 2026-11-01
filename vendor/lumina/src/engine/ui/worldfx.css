@@ -1,0 +1,311 @@
+/*
+ * Luminati UI — the world labels layer (WorldLabels.js, combat levels only): numbers, enemy bars and
+ * pips, edge arrows, alerts, the lock-on reticle. Split out of combat.css (docs/specs/PIXEL_UI.md §8);
+ * imported after ui.css and combat.css by WorldLabels.js, so the combat chunk alone carries it.
+ *
+ * Mockup G's family (docs/specs/PIXEL_UI.md §5): sizes in art pixels of the root's --px (whole
+ * device pixels, UiScale.js), the art painted once by WorldLabels.js into the layer's --lu-wf-*
+ * url()s and shown pixelated, the text in the type roles (layout/type.js styleText: font, size,
+ * outline and edge filter inline), every motion in whole art px and hard steps.
+ */
+
+.lu-ebar__lag.is-snap { transition: none; }
+
+/* World labels layer (z 1, before the prompt): numbers, enemy bars / pips, edge arrows, alerts,
+   reticle. */
+.lu-worldfx {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s steps(3, end), visibility 0s;
+}
+.lu-root--title .lu-worldfx,
+.lu-root--dialog .lu-worldfx {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s steps(3, end), visibility 0s linear 0.3s;
+}
+.lu-num,
+.lu-ebar,
+.lu-edge,
+.lu-alert,
+.lu-reticle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  will-change: transform;
+}
+/* every piece of art in the layer is pixel art at --px per art px */
+.lu-ebar__frame,
+.lu-ebar__frame::after,
+.lu-ebar__pip,
+.lu-edge__a,
+.lu-edge__glow,
+.lu-alert__i,
+.lu-reticle__c,
+.lu-reticle__h {
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+}
+
+/* --- floating numbers -------------------------------------------------------------------------
+   .lu-num__t is the moving box: placed by WorldLabels with the text's ink centre on the anchor
+   (left / top, whole device px), its own compositor layer, in the kind's colour; .lu-num__x inside
+   it is the text, styled in its role (styleText: font, size, line height, G's ol8 outline, the crisp
+   filter — painted into the box's layer on the device-pixel grid). Motion (0.8 s, hard steps): 2 art
+   px low, 1 up, rest, then 10 art px up one at a time; the fade in three steps. A crit's and
+   Perfect!'s first frames are an integer pop: the text at twice its size (--lu-fs / --lu-lh), the box
+   moved to keep it centred (--lu-hw / --lu-mid), then 2 art px up. */
+.lu-num.is-a,
+.lu-num.is-b { visibility: visible; }
+.lu-num.is-out { visibility: hidden; }
+.lu-num__t {
+  position: absolute;
+  display: block;
+  opacity: 0;
+  will-change: transform, opacity;
+  color: var(--g-hit);
+}
+/* the text in the box's flow (the role's .g would take it out: the box would have no size) */
+.lu-root .lu-num__t > .lu-num__x { position: relative; }
+.lu-num.is-a .lu-num__t { animation: lu-num-a 0.8s steps(1, end) both; }
+.lu-num.is-b .lu-num__t { animation: lu-num-b 0.8s steps(1, end) both; }
+.lu-num--crit.is-a .lu-num__t,
+.lu-num--perfect.is-a .lu-num__t { animation-name: lu-crit-a; }
+.lu-num--crit.is-b .lu-num__t,
+.lu-num--perfect.is-b .lu-num__t { animation-name: lu-crit-b; }
+.lu-num--crit.is-a .lu-num__x,
+.lu-num--perfect.is-a .lu-num__x { animation: lu-pop-a 0.8s steps(1, end) both; }
+.lu-num--crit.is-b .lu-num__x,
+.lu-num--perfect.is-b .lu-num__x { animation: lu-pop-b 0.8s steps(1, end) both; }
+.lu-num--crit .lu-num__t,
+.lu-num--perfect .lu-num__t { color: var(--g-crit); }
+.lu-num--hurt .lu-num__t { color: var(--g-hp3); }
+.lu-num--heal .lu-num__t { color: var(--g-heal); }
+.lu-num--mp .lu-num__t { color: var(--g-mp3); }
+.lu-num--guard .lu-num__t { color: var(--g-tx2); }
+/* a party companion's hit (PARTY.md §5.2): G's mint, the hit's size */
+.lu-num--ally .lu-num__t { color: var(--g-mint); }
+@keyframes lu-num-a {
+  0% { opacity: 1; transform: translateY(calc(var(--px) * 2)); }
+  6% { transform: translateY(calc(var(--px) * -1)); }
+  12% { transform: translateY(0); }
+  30% { transform: translateY(0); animation-timing-function: steps(10, end); }
+  72% { opacity: 0.66; }
+  84% { opacity: 0.33; }
+  94% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -10)); }
+}
+@keyframes lu-num-b {
+  0% { opacity: 1; transform: translateY(calc(var(--px) * 2)); }
+  6% { transform: translateY(calc(var(--px) * -1)); }
+  12% { transform: translateY(0); }
+  30% { transform: translateY(0); animation-timing-function: steps(10, end); }
+  72% { opacity: 0.66; }
+  84% { opacity: 0.33; }
+  94% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -10)); }
+}
+@keyframes lu-crit-a {
+  0% { opacity: 1; transform: translate(calc(var(--lu-hw) * -1), calc(var(--lu-mid) * -1)); }
+  6% { transform: translateY(calc(var(--px) * -2)); }
+  12% { transform: translateY(0); }
+  30% { transform: translateY(0); animation-timing-function: steps(10, end); }
+  72% { opacity: 0.66; }
+  84% { opacity: 0.33; }
+  94% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -10)); }
+}
+@keyframes lu-crit-b {
+  0% { opacity: 1; transform: translate(calc(var(--lu-hw) * -1), calc(var(--lu-mid) * -1)); }
+  6% { transform: translateY(calc(var(--px) * -2)); }
+  12% { transform: translateY(0); }
+  30% { transform: translateY(0); animation-timing-function: steps(10, end); }
+  72% { opacity: 0.66; }
+  84% { opacity: 0.33; }
+  94% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -10)); }
+}
+@keyframes lu-pop-a {
+  0% { font-size: calc(var(--lu-fs) * 2); line-height: calc(var(--lu-lh) * 2); }
+  6% { font-size: var(--lu-fs); line-height: var(--lu-lh); }
+  100% { font-size: var(--lu-fs); line-height: var(--lu-lh); }
+}
+@keyframes lu-pop-b {
+  0% { font-size: calc(var(--lu-fs) * 2); line-height: calc(var(--lu-lh) * 2); }
+  6% { font-size: var(--lu-fs); line-height: var(--lu-lh); }
+  100% { font-size: var(--lu-fs); line-height: var(--lu-lh); }
+}
+
+/* --- enemy bars: 34 × 4 art px (an ink outline, the trough rows, the fill's ramp rows, the pale
+   chip trailing it), an elite's gilt ring and name line, or the aggro pip; all hung over the
+   anchor (the bar's bottom on it) ------------------------------------------------------------ */
+.lu-ebar { opacity: 0; transition: opacity 0.2s steps(2, end), visibility 0s linear 0.2s; }
+.lu-ebar.is-on { visibility: visible; opacity: 1; transition: opacity 0.2s steps(2, end), visibility 0s; }
+.lu-ebar.is-on.is-out { visibility: hidden; opacity: 0; transition: none; }
+.lu-ebar__in {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.lu-ebar__frame {
+  position: absolute;
+  left: calc(var(--px) * -17);
+  top: calc(var(--px) * -4);
+  width: calc(var(--px) * 34);
+  height: calc(var(--px) * 4);
+  background-image: var(--lu-wf-bar);
+  background-size: 100% 100%;
+}
+.lu-ebar__fill,
+.lu-ebar__lag {
+  position: absolute;
+  left: var(--px);
+  top: var(--px);
+  width: calc(var(--px) * 32);
+  height: calc(var(--px) * 2);
+  transform-origin: 0 50%;
+}
+.lu-ebar__lag {
+  background: linear-gradient(180deg, var(--g-g5) 50%, var(--g-g4) 50%);
+  transition: transform 0.45s steps(5, end) 0.3s;
+}
+.lu-ebar__fill { background: linear-gradient(180deg, var(--g-hp3) 50%, var(--g-hp1) 50%); }
+/* an elite's ring: gilt, 2 art px round the bar (38 × 8) */
+.lu-ebar.is-elite .lu-ebar__frame::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--px) * -2);
+  top: calc(var(--px) * -2);
+  width: calc(var(--px) * 38);
+  height: calc(var(--px) * 8);
+  background-image: var(--lu-wf-ring);
+  background-size: 100% 100%;
+}
+/* the name line: "Lv" (tiny), the level (num), the NAME (small, tracked; line in CJK) — each part
+   placed by WorldLabels (_layoutName) in its role */
+.lu-ebar__name {
+  display: none;
+  position: absolute;
+}
+.lu-ebar.is-elite .lu-ebar__name { display: block; }
+.lu-root .lu-ebar__lv { color: var(--g-g4); }
+.lu-root .lu-ebar__lvn { color: var(--g-tx1); }
+.lu-root .lu-ebar__nm { color: var(--g-g5); }
+.lu-ebar__pip {
+  display: none;
+  position: absolute;
+  left: calc(var(--px) * -3);
+  top: calc(var(--px) * -7);
+  width: calc(var(--px) * 7);
+  height: calc(var(--px) * 7);
+  background-image: var(--lu-wf-pip);
+  background-size: 100% 100%;
+}
+.lu-ebar.is-pip .lu-ebar__pip { display: block; }
+.lu-ebar.is-pip .lu-ebar__frame,
+.lu-ebar.is-pip .lu-ebar__name { display: none; }
+
+/* --- off-screen edge arrows: 8 pre-drawn octants (17 × 17 art px cells of --lu-wf-edge, the hot
+   frames in the second row), the octant in --o; a 1 art px nudge toward the enemy (--nx / --ny),
+   and while it winds up the hot frame flashes in two steps ------------------------------------ */
+.lu-edge.is-on:not(.is-in) { visibility: visible; }
+.lu-edge__a,
+.lu-edge__glow {
+  position: absolute;
+  left: calc(var(--px) * -8);
+  top: calc(var(--px) * -8);
+  width: calc(var(--px) * 17);
+  height: calc(var(--px) * 17);
+  background-image: var(--lu-wf-edge);
+  background-size: calc(var(--px) * 136) calc(var(--px) * 34);
+  background-position: calc(var(--px) * -17 * var(--o, 0)) 0;
+}
+.lu-edge__glow {
+  z-index: 1;
+  opacity: 0;
+  background-position: calc(var(--px) * -17 * var(--o, 0)) calc(var(--px) * -17);
+}
+.lu-edge.is-on .lu-edge__a { animation: lu-wf-nudge 0.8s steps(1, end) infinite; }
+.lu-edge.is-on.is-windup .lu-edge__glow { animation: lu-wf-nudge 0.8s steps(1, end) infinite, lu-wf-hot 0.5s steps(1, end) infinite; }
+@keyframes lu-wf-nudge {
+  0% { translate: 0 0; }
+  60% { translate: calc(var(--px) * var(--nx, 0)) calc(var(--px) * var(--ny, 0)); }
+}
+@keyframes lu-wf-hot {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* --- '!' alert: 7 × 12 art px in the ember ramp, over its anchor; it appears 3 art px low, hops 2
+   up, rests, then rises 1 and fades in two steps ---------------------------------------------- */
+.lu-alert.is-a,
+.lu-alert.is-b { visibility: visible; }
+.lu-alert.is-out { visibility: hidden; }
+.lu-alert__i {
+  position: absolute;
+  left: calc(var(--px) * -3);
+  top: calc(var(--px) * -12);
+  width: calc(var(--px) * 7);
+  height: calc(var(--px) * 12);
+  background-image: var(--lu-wf-alert);
+  background-size: 100% 100%;
+  opacity: 0;
+}
+.lu-alert.is-a .lu-alert__i { animation: lu-alert-a 0.8s steps(1, end) both; }
+.lu-alert.is-b .lu-alert__i { animation: lu-alert-b 0.8s steps(1, end) both; }
+@keyframes lu-alert-a {
+  0% { opacity: 1; transform: translateY(calc(var(--px) * 3)); }
+  8% { transform: translateY(calc(var(--px) * -2)); }
+  16% { transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  88% { opacity: 0.5; transform: translateY(calc(var(--px) * -1)); }
+  96% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -1)); }
+}
+@keyframes lu-alert-b {
+  0% { opacity: 1; transform: translateY(calc(var(--px) * 3)); }
+  8% { transform: translateY(calc(var(--px) * -2)); }
+  16% { transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  88% { opacity: 0.5; transform: translateY(calc(var(--px) * -1)); }
+  96% { opacity: 0; }
+  100% { opacity: 0; transform: translateY(calc(var(--px) * -1)); }
+}
+
+/* --- lock-on reticle (G): four bracket L-shapes (14 × 14 art px; their corners 15 art px from the
+   centre) stepping one art px in and out (0.7 s, hard steps) round a ruby heart (7 × 7) --------- */
+.lu-reticle.is-on:not(.is-out) { visibility: visible; }
+.lu-reticle__c,
+.lu-reticle__h {
+  position: absolute;
+  background-size: 100% 100%;
+}
+.lu-reticle__c { width: calc(var(--px) * 14); height: calc(var(--px) * 14); }
+.lu-reticle__c--tl { left: calc(var(--px) * -17); top: calc(var(--px) * -17); background-image: var(--lu-wf-ret-tl); --sx: 1; --sy: 1; }
+.lu-reticle__c--tr { left: calc(var(--px) * 3); top: calc(var(--px) * -17); background-image: var(--lu-wf-ret-tr); --sx: -1; --sy: 1; }
+.lu-reticle__c--bl { left: calc(var(--px) * -17); top: calc(var(--px) * 3); background-image: var(--lu-wf-ret-bl); --sx: 1; --sy: -1; }
+.lu-reticle__c--br { left: calc(var(--px) * 3); top: calc(var(--px) * 3); background-image: var(--lu-wf-ret-br); --sx: -1; --sy: -1; }
+.lu-reticle__h {
+  left: calc(var(--px) * -3);
+  top: calc(var(--px) * -3);
+  width: calc(var(--px) * 7);
+  height: calc(var(--px) * 7);
+  background-image: var(--lu-wf-heart);
+}
+.lu-reticle.is-on .lu-reticle__c { animation: lu-wf-step 0.7s steps(1, end) infinite; }
+@keyframes lu-wf-step {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(calc(var(--px) * var(--sx, 0)), calc(var(--px) * var(--sy, 0))); }
+  100% { transform: translate(calc(var(--px) * var(--sx, 0)), calc(var(--px) * var(--sy, 0))); }
+}
+
+/* While the death screen is up (.lu-root--death, combat.css) the world labels step aside. */
+.lu-root--death .lu-worldfx {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.4s steps(3, end), visibility 0s linear 0.4s;
+}

@@ -1,0 +1,236 @@
+/*
+ * The pixel UI's base (docs/specs/PIXEL_UI.md §2, §4): mockup G's stage rules scoped to the UI
+ * root — the palette tokens, the layers of a component's art and text, the text rules per
+ * language, the edge filters (on text only: never on the glass, whose translucency they would turn
+ * opaque) and the idle motion in whole art pixels and hard steps. One art pixel is --px CSS pixels
+ * (whole device pixels: UI.js sets --px, --fpx, --shrink and --shrink-corner from the screen,
+ * src/engine/ui/UiScale.js).
+ */
+
+/* --- the palette: G's tokens (src/engine/ui/art/palette.js PALETTE, the source of truth; UI.js
+   writes the same values inline with applyPalette) -------------------------------------------- */
+.lu-root {
+  --g-ink0: #07080f;
+  --g-ink1: #0c1022;
+  --g-ink2: #141a36;
+  --g-ink3: #1a2242;
+  --g-ink4: #2a3462;
+  --g-ink5: #6f7aa6;
+  --g-g0: #3e2a10;
+  --g-g1: #6e4f1e;
+  --g-g2: #8c6a32;
+  --g-g3: #c9a45c;
+  --g-g4: #e8cf8a;
+  --g-g5: #f4e3b3;
+  --g-gs0: #3e2a10;
+  --g-gs1: #6e4f1e;
+  --g-gs2: #b8904a;
+  --g-dm1: #6a5a3c;
+  --g-dm2: #4c4231;
+  --g-dm3: #332d26;
+  --g-tx1: #f3ead7;
+  --g-tx2: #c6bda9;
+  --g-tx3: #8f897d;
+  --g-sel: #fff6e0;
+  --g-kw: #f3cf7a;
+  --g-sa1: #23408f;
+  --g-sa2: #5288e6;
+  --g-sa3: #b0d6ff;
+  --g-se1: #8e3f16;
+  --g-se2: #e8873a;
+  --g-se3: #ffc07a;
+  --g-rb1: #6a1418;
+  --g-rb2: #d0452f;
+  --g-rb3: #ff9a7a;
+  --g-em1: #9c2a12;
+  --g-em2: #f08a3a;
+  --g-em3: #ffe0a8;
+  --g-hp0: #7a1530;
+  --g-hp1: #a8233a;
+  --g-hp2: #e0674f;
+  --g-hp3: #f08a6a;
+  --g-mp0: #34569c;
+  --g-mp1: #4f7fd8;
+  --g-mp2: #6aa6ee;
+  --g-mp3: #8fd0ff;
+  --g-sp0: #8c6a32;
+  --g-sp1: #c9a45c;
+  --g-sp2: #e8cf8a;
+  --g-bs0: #6a1418;
+  --g-bs1: #9c1f24;
+  --g-bs2: #d0452f;
+  --g-bs3: #f07a4a;
+  --g-bs4: #ffc690;
+  --g-tr0: #120a0e;
+  --g-tr1: #26151c;
+  --g-xp0: #2e2210;
+  --g-hit: #fff4dc;
+  --g-crit: #ffd98a;
+  --g-mint: #9fe6d2;
+  --g-heal: #bfe58f;
+  --g-nol: #120c08;
+  --g-teal: #3fcfae;
+  --g-teal-rim: #e6fff7;
+  --g-foe: #e0674f;
+  --g-way: #7fe3ff;
+  --g-fire: #ff9a3c;
+  --g-npc: #8fd0ff;
+  --g-phase: #f6b25a;
+  --g-kf0: #fffaf0;
+  --g-kf1: #fbf3dc;
+  --g-kf2: #d6c08e;
+  --g-kf3: #a88a50;
+  --g-kink: #2a1d0c;
+  --g-band: #080b1a;
+  --g-plate0: #222a4e;
+  --g-plate1: #0c0f20;
+  --g-glass0: rgba(26, 34, 66, 0.86);
+  --g-glass1: rgba(19, 25, 50, 0.88);
+  --g-glass2: rgba(12, 16, 34, 0.9);
+  --g-glass3: rgba(6, 8, 18, 0.93);
+  --g-glass-hi: rgba(96, 118, 184, 0.55);
+  --g-glass-lat: rgba(96, 118, 184, 0.16);
+  --g-glass-x: rgba(140, 158, 214, 0.34);
+  --g-wash: rgba(201, 164, 92, 0.22);
+  --g-shade: rgba(4, 6, 16, 0.74);
+  --g-dim: #04050c;
+  --g-veil: rgba(7, 8, 15, 0.8);
+  --g-slot-glass: rgba(12, 16, 34, 0.6);
+  --g-card-glass: rgba(40, 50, 96, 0.28);
+  --g-card-sel0: rgba(201, 164, 92, 0.2);
+  --g-card-sel1: rgba(201, 164, 92, 0.12);
+  --g-card-sel2: rgba(201, 164, 92, 0.06);
+  --g-sock0: #1c180f;
+  --g-sock1: #2c2618;
+  --g-sock2: #3a3220;
+  --g-m-g: #5f9a3e;
+  --g-m-G: #3f7434;
+  --g-m-f: #8fb14e;
+  --g-m-F: #7a5433;
+  --g-m-s: #d6c08b;
+  --g-m-p: #b18a5c;
+  --g-m-c: #8d8a8e;
+  --g-m-k: #a6a39b;
+  --g-m-m: #6e7d5c;
+  --g-m-r: #5d5a60;
+  --g-m-t: #2b4f2a;
+  --g-m-b: #9c6b3f;
+  --g-m-w: #3b7fa6;
+  --g-m-void: #101018;
+  --g-m-cliff: #3e3228;
+  --g-m-light: #9fc46a;
+  --g-m-mute: rgba(6, 8, 18, 0.15);
+  --g-m-wedge: rgba(255, 240, 200, 0.42);
+  --g-m-vig0: rgba(6, 8, 18, 0.55);
+  --g-m-vig1: rgba(6, 8, 18, 0.38);
+  --g-m-vig2: rgba(6, 8, 18, 0.3);
+  --g-m-ol: rgba(20, 14, 6, 0.92);
+  --g-day0: #25306a;
+  --g-day1: #2b3778;
+  --g-day2: #c98aa0;
+  --g-day3: #f3c989;
+  --g-day4: #f5e4b0;
+  --g-day5: #f2b45a;
+  --g-day6: #d07a55;
+  --g-day7: #6e4f8c;
+  /* the scale before UI.js measures the screen (one art px = 2 CSS px) */
+  --px: 2px;
+  --fpx: 1px;
+  --shrink: 1;
+  --shrink-corner: 1;
+  --lu-dpx: 1px;
+  /* The faces (docs/specs/PIXEL_UI.md §4) for CSS that sets text outside txt(): UI.js writes the
+     language's roles over these defaults on every scale change (layout/type.js fontTokens) —
+     --lu-font (+ -w) the body role, the root's own font (ui.css); --lu-font-name / -line / -num /
+     -tiny (+ -w) those roles; the plain faces with their pixel glyphs --lu-font-j15, --lu-font-j10,
+     --lu-font-t5 (Latin in any language, sized on its own grid). */
+  --lu-font-j15: "Jersey 15", "Lu Glyph 15", monospace;
+  --lu-font-j10: "Jersey 10", "Lu Glyph 10", monospace;
+  --lu-font-t5: Tiny5, "Lu Glyph 5", monospace;
+  --lu-font: var(--lu-font-j15);
+  --lu-font-w: 400;
+  /* the old UI's face tokens, kept as aliases of the pixel faces for stylesheets not moved yet */
+  --lu-serif: var(--lu-font-j15);
+  --lu-display: var(--lu-font-j15);
+  --lu-pixel: var(--lu-font-t5);
+  /* easing for the fades (hud.css, title.css) and the debug panel's gilt and gap (hud.css) */
+  --lu-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --lu-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --lu-gold-hi: #e8cf8a;
+  --lu-gold-line: rgba(201, 164, 92, 0.92);
+  --lu-gap: clamp(14px, 1.6vw, 40px);
+}
+
+/* --- layers: canvases and text placed in art px (layout/layout.js) ----------------------------- */
+.lu-root .g { position: absolute; z-index: 1; display: block; box-sizing: border-box; margin: 0; }
+.lu-root canvas.g { image-rendering: pixelated; }
+.lu-root .g.grp { z-index: 2; }
+.lu-root canvas.g.frame { z-index: 0; }
+.lu-root canvas.g.orn { z-index: 3; pointer-events: none; }
+.lu-root canvas.g.key { z-index: 4; }
+.lu-root .tx.keylab { z-index: 5; }
+/* No fractional art pixel while a group fits (UiScale.js): the corner groups shrink about the corner
+   they hang from only on a screen under G's corner footprint (512 × 300 art px: 1024 × 600 device
+   px at px 2; the root's data-lu-scale="shrunk"); a centred group only when it does not fit the
+   screen itself (layout.js group() writes data-fit and --lu-fit). Both through the independent
+   `scale` property, so a builder's own `transform` / `translate` on a group (a slide-in, the idle
+   motion) composes with it instead of replacing it. */
+.lu-root[data-lu-scale="shrunk"] .g.grp:is([data-anchor="tl"], [data-anchor="tr"], [data-anchor="bl"], [data-anchor="br"]) { scale: var(--shrink-corner); }
+.lu-root .g.grp[data-fit="shrunk"] { scale: var(--lu-fit, 1); }
+/* a component's element that holds groups: it must cover the whole root (group() measures its
+   anchors and the shrink's origin from this box) */
+.lu-root .lu-stage { position: absolute; inset: 0; pointer-events: none; }
+
+/* --- text: one type system per language (layout/type.js sets each element's font inline) -------- */
+.lu-root .tx {
+  white-space: nowrap; font-kerning: none; font-synthesis: none; font-variant-ligatures: none; z-index: 2;
+  /* nothing inherited from the old panels around it: tracking, case, italics and shadows are the role's */
+  letter-spacing: 0; text-transform: none; font-style: normal; text-shadow: none;
+}
+.lu-root .tx .kw { color: var(--g-kw); }
+/* a line that starts with a space it needs (Sela's ' · Warden · Balanced' after her level) */
+.lu-root .tx.pre { white-space: pre; }
+/* Japanese and Chinese: set solid, no fake bold, italics or caps; wrapped text breaks between
+   characters by the strict rules (no 「 at a line end, no 、。」！？，。” at a line start) */
+.lu-root .tx.cjk { letter-spacing: 0; text-transform: none; font-style: normal; }
+/* wrapped text in every language breaks evenly (no word or character left alone on a last line) */
+.lu-root .tx.wrap { white-space: normal; text-wrap: pretty; }
+.lu-root .tx.cjk.wrap { line-break: strict; word-break: normal; overflow-wrap: anywhere; text-align: start; }
+/* Japanese: break between phrases, not inside a word (Chromium 119+) */
+.lu-root .tx.cjk.wrap:lang(ja) { word-break: auto-phrase; }
+/* the first of two adjacent full-width marks in half width (type.js PUNCT_PAIR) */
+.lu-root .tx .halt { font-feature-settings: "halt" 1; }
+/* Chinese: a middle dot between two characters in the CJK face, not the Jersey alias's tiny dot
+   (type.js CJK_DOT; measure() measures it in this face) */
+.lu-root .tx .cjkdot { font-family: "Noto Sans SC", sans-serif; }
+/* The edges, at a whole-number device scale (the system rasteriser leaves colour fringes on glyph
+   edges); off while the HUD groups are shrunk (below 1280 × 720 device px). Only text:
+   - the pixel fonts (all of English; numbers, Tiny5 labels and keycaps everywhere): alpha thresholded;
+   - CJK text from 20 CSS px (headings, names, the dialogue): a one-pixel alpha ramp, sharp but not jagged;
+   - small CJK text (lines, labels): grey anti-aliasing kept, the fringes gone. */
+.lu-root[data-lu-scale="crisp"] .tx.fx-crisp { filter: url(#lu-crisp); }
+.lu-root[data-lu-scale="crisp"] .tx.fx-soft { filter: url(#lu-soft); }
+.lu-root[data-lu-scale="crisp"] .tx.fx-aa { filter: url(#lu-aa); }
+/* …and off inside a centred group scaled to fit (not a whole device scale either) */
+.lu-root .g.grp[data-fit="shrunk"] .tx { filter: none; }
+
+/* --- layers inside a component ------------------------------------------------------------------ */
+.lu-root .g.veil { z-index: 4; }
+.lu-root .g.over { z-index: 5; }
+.lu-root .g.under { z-index: 1; }
+
+/* --- the measure host (UI.js): always laid out, never seen ------------------------------------- */
+.lu-root .lu-measure { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; contain: layout style; }
+.lu-root .lu-filters { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* --- idle motion: whole art pixels, hard steps -------------------------------------------------- */
+@keyframes lu-g-bob { 0%, 49% { transform: translateY(0); } 50%, 100% { transform: translateY(var(--px)); } }
+@keyframes lu-g-nudge { 0%, 59% { transform: translateX(0); } 60%, 100% { transform: translateX(var(--px)); } }
+@keyframes lu-g-blink { 0%, 64% { opacity: 1; } 65%, 100% { opacity: 0; } }
+@keyframes lu-g-breathe { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes lu-g-step { 0%, 49% { transform: translate(0, 0); } 50%, 100% { transform: translate(calc(var(--px) * var(--sx, 0)), calc(var(--px) * var(--sy, 0))); } }
+.lu-root .g.bob { animation: lu-g-bob 0.9s infinite; }
+.lu-root .g.nudge { animation: lu-g-nudge 0.8s infinite; }
+.lu-root .g.blink { animation: lu-g-blink 1s infinite; }
+.lu-root .g.breathe { animation: lu-g-breathe 1.2s infinite; }
+.lu-root .g.step { animation: lu-g-step 0.7s infinite; }
