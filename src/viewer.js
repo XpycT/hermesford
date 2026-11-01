@@ -22,6 +22,10 @@ import { Emotes } from '../vendor/lumina/src/engine/ui/Emotes.js'
 import { Journal } from '../vendor/lumina/src/engine/ui/Journal.js'
 import { EndCard } from '../vendor/lumina/src/engine/ui/EndCard.js'
 import { PartyFrames } from '../vendor/lumina/src/engine/ui/PartyFrames.js'
+import { group, box, put, keyHints } from '../vendor/lumina/src/engine/ui/layout/layout.js'
+import { txc, measure, grow } from '../vendor/lumina/src/engine/ui/layout/type.js'
+import { glyph, dimGlyph, plate } from '../vendor/lumina/src/engine/ui/art/pieces.js'
+import { pal } from '../vendor/lumina/src/engine/ui/art/palette.js'
 import { phaseName } from '../vendor/lumina/src/engine/ui/HUD.js'
 import { renderLevelMap } from '../vendor/lumina/src/engine/level/LevelMap.js'
 import { decide, route, state, toolSpot, hash, SPOTS } from './village.js'
@@ -31,7 +35,8 @@ const DEG = Math.PI / 180
 
 /** The controls legend (Lumina's HUD, bottom-left): only what the village really does. */
 const CONTROLS = [
-  { id: 'pan', keys: 'Drag', label: 'Pan (or scroll)' },
+  { id: 'follow', keys: '←/→', label: 'Follow a villager' },
+  { id: 'pan', keys: 'Drag', label: 'Pan (or scroll), lets go' },
   { id: 'camera', keys: 'Q/E', label: 'Rotate camera' },
   { id: 'zoom', keys: 'Z/X', label: 'Zoom (or pinch)' },
   { id: 'map', keys: 'N/Tab', label: 'World map' },
@@ -140,19 +145,108 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const { emotes } = ui.useStoryUI({ Journal, Emotes, EndCard })
   // the villagers awake, top-left under the place plate (Lumina's party frames): who, doing what
   const frames = new PartyFrames(ui.root)
+  // chat titles in the party frames' face (Tiny5, 'small' tracked caps): Lumina's one pixel face
+  // with Cyrillic (Jersey has none); the toast is laid out by Lumina for its 'line' role, so its
+  // size and text are redone in this one
+  const TITLE = { font: 'small', track: 1, drop: true }
+  const caps = t => String(t).toUpperCase()
+  const hud = ui.hud, toastSize = hud._toastSize.bind(hud), renderToast = hud._renderToast.bind(hud)
+  hud._toastSize = (spec, room) => {
+    const z = toastSize(spec, room)
+    if (!spec.title || z.title) return z
+    const tw = measure(caps(spec.text), 'small', 1)
+    const w = z.w - z.tw + tw
+    return (spec.size = { ...z, tw, lines: 1, w: w + (w % 2), parts: null, title: true })
+  }
+  hud._renderToast = (el, spec, z) => {
+    renderToast(el, spec, z)
+    const t = spec.title && el.querySelector('.lu-toast__text')
+    if (!t) return
+    const x = parseFloat(t.style.left.match(/\* ([\d.]+)/)?.[1] ?? 35)
+    t.remove()
+    txc(el, caps(spec.text), x, z.h / 2, { ...TITLE, color: pal().g5, cls: 'lu-toast__text' })
+  }
+  const titleToast = (text, seconds, kind) => {
+    const el = hud.toast(text, seconds, { kind })
+    hud._toastSpecs.get(el).title = true
+    hud._toastSpecs.get(el).size = hud._toastSpecs.get(el).drawn = null
+    hud._layoutToasts()
+  }
   let framesAt = 0
+  const short = t => (t.length > 22 ? t.slice(0, 21) + '…' : t)
+  // the villagers awake, the followed one first, then by urgency
+  // (the chooser cycles by slot: a steady order while states change)
+  const awake = (now, bySlot = false) => residents.map(r => ({ r, st: state(r, now) })).filter(x => x.st !== 'asleep')
+    .sort((a, b) => bySlot ? a.r.slot - b.r.slot : (b.r.id === followId) - (a.r.id === followId) || STATE_ORDER[a.st] - STATE_ORDER[b.st] || a.r.slot - b.r.slot)
   function updateFrames(now) {
     if (now - framesAt < 250) return
     framesAt = now
-    const list = residents.map(r => ({ r, st: state(r, now) })).filter(x => x.st !== 'asleep')
-      .sort((a, b) => STATE_ORDER[a.st] - STATE_ORDER[b.st] || a.r.slot - b.r.slot).slice(0, MAX_FRAMES)
-    frames.update(list.map(({ r, st }) => ({
+    frames.update(awake(now).slice(0, MAX_FRAMES).map(({ r, st }) => ({
+      fighting: r.id === followId, // the frame's glow: the camera follows this one
       id: r.id,
-      name: r.title.length > 22 ? r.title.slice(0, 21) + '…' : r.title,
+      name: short(r.title),
       color: `hsl(${hash(r.id) % 360} 55% 62%)`,
       cls: st === 'tool' ? TRADE[toolSpot(r.tool)] : STATE_LABEL[st],
-      tactic: st === 'tool' ? r.tool : '',
+      tactic: [r.id === followId && 'Following', st === 'tool' && r.tool].filter(Boolean).join(' · '),
     })))
+  }
+
+  // the follow chooser, bottom-centre: Lumina's title chooser (TitleScreen._renderChooser, private
+  // there; its layout here as is) — ◀ the followed chat ▶ on the plate, the ← → hint under it
+  let followId = null
+  let chooserEl = null, chooserKey = ''
+  function cycle(dir) {
+    const ids = [null, ...awake(performance.now(), true).filter(x => npcs[x.r.slot]?.present).map(x => x.r.id)]
+    followId = ids[(ids.indexOf(followId) + dir + ids.length) % ids.length]
+    framesAt = 0
+  }
+  function renderChooser(now) {
+    const r = followId && residents.find(x => x.id === followId)
+    const label = r ? short(r.title) : 'Free camera'
+    const n = awake(now).length
+    const hint = r ? 'Next villager · drag lets go' : 'Follow a villager'
+    if (chooserKey === `${label}|${n}|${hint}`) return
+    chooserKey = `${label}|${n}|${hint}`
+    chooserEl?.remove()
+    const k = pal()
+    const gn = 2 * Math.ceil(grow('name') / 2)
+    const pw = Math.max(170, measure(caps(label), 'small', 1) + 50)
+    const x0 = 320 - Math.floor(pw / 2)
+    const y = 360 - 14 - (16 + gn + 22) + gn / 2
+    const g = group(ui.hud.element, 'bc', x0, y - gn / 2, pw, 16 + gn + 22, 'vl-follow')
+    const lab = box(g, x0, y - gn / 2, pw, 16 + gn)
+    put(lab, plate(pw, 16 + gn), x0, y - gn / 2)
+    txc(lab, caps(label), 320, y + 8, { ...TITLE, color: k.kw, align: 'center' }) // bright gold
+    for (const [dir, gx] of [[-1, x0 + 6], [1, x0 + pw - 11]]) {
+      const a = box(g, gx - 5, y - gn / 2, 15, 16 + gn)
+      a.setAttribute('role', 'button')
+      a.setAttribute('aria-label', dir < 0 ? 'Previous villager' : 'Next villager')
+      a.style.cssText += ';pointer-events:auto;cursor:pointer'
+      a.addEventListener('click', () => cycle(dir))
+      put(a, n ? glyph(dir < 0 ? 'left' : 'right') : dimGlyph(dir < 0 ? 'left' : 'right'), gx, y + 5)
+    }
+    const hy = y + 16 + gn / 2 + 6
+    keyHints(box(g, x0, hy, pw, 11), [{ keys: ['←', '→'], label: hint }], 320, hy, { align: 'center', color: k.tx2, ol: true })
+    chooserEl = g
+  }
+  const onKey = e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    if (e.target.closest?.('input, textarea, [contenteditable]') || !container.isConnected) return
+    e.preventDefault()
+    cycle(e.key === 'ArrowLeft' ? -1 : 1)
+  }
+  window.addEventListener('keydown', onKey)
+  // the camera glides after the followed villager; it lets go when that one leaves
+  function follow(dt) {
+    if (!followId) return
+    const r = residents.find(x => x.id === followId)
+    if (!r?.live) { followId = null; framesAt = 0; return } // the chat closed or went to sleep
+    const npc = npcs[r.slot]
+    if (!npc?.present) return // indoors: the camera waits at the door
+    const p = focus.position, t = 1 - Math.exp(-6 * dt)
+    p.x += (npc.position.x - p.x) * t
+    p.z += (npc.position.z - p.z) * t
+    p.y = tileMap.getHeight(p.x, p.z) + 1
   }
   const regions = level.objects.filter(o => o.type === 'region')
   const levelMap = renderLevelMap(level)
@@ -163,6 +257,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const bannersShown = new Set()
   let liveClock = hour == null
   ui.fontsReady.then(() => {
+    ui.fontsReady.done = true
     ui.hud.setControls(CONTROLS)
     ui.hud.setLocation(level.name, level.subtitle ?? '')
     ui.hud.showHelp(true)
@@ -209,6 +304,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       updateUi(dt)
       onTick?.(dt)
       drive(dt, performance.now())
+      follow(dt)
       for (const n of npcs) n.update(dt, npcCtx)
       critters.update(dt, critterCtx)
       rig.update(dt, engine.input)
@@ -289,13 +385,14 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     for (const npc of npcs) if (!bound.has(npc) && npc.present) { paths.delete(npc); npc.setPresent(false) }
     placePlates()
     updateFrames(now)
+    if (ui.fontsReady.done) renderChooser(now)
     const sk = THREE.MathUtils.lerp(1, 0.5, lighting.nightFactor ?? 0)
     for (const n of npcs) n.silhouette.material.color.copy(SILHOUETTE).multiplyScalar(sk)
     // a new chat moved in: Lumina's quest toast (the first roster is the village as found, no toasts)
     if (residents.length) {
       for (const r of residents) {
         if (known.has(r.id)) continue
-        if (known.size && r.live) ui.hud.toast(`New villager: ${r.title}`, 4, { kind: 'quest' })
+        if (known.size && r.live) titleToast(`New villager: ${r.title}`, 4, 'quest')
         known.add(r.id)
       }
     }
@@ -322,6 +419,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     return ray.ray.intersectPlane(ground, out)
   }
   const pan = (x0, y0, x1, y1) => {
+    if (followId) { followId = null; framesAt = 0 } // moving the camera lets go
     ground.constant = -(focus.position.y - 1)
     if (!groundAt(x0, y0, hitA) || !groundAt(x1, y1, hitB)) return
     const b = rig.bounds
@@ -408,6 +506,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       io.disconnect()
       emotes.dispose()
       frames.dispose()
+      window.removeEventListener('keydown', onKey)
       for (const p of plates) p.el.remove()
       ui.dispose()
       el.removeEventListener('pointerdown', onDown)
