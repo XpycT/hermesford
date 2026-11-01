@@ -9,11 +9,13 @@ const q = new URLSearchParams(location.search)
 const level = q.get('level') === 'sample-hamlet' ? hamlet : village
 window.__errs ??= []
 
+const TITLES = ['Fix flaky CI on main', 'Refactor auth module', 'Research vector DBs', 'Write release notes', 'Plan Q3 roadmap',
+  'Debug memory leak', 'Translate docs to German', 'Review PR #482', 'Benchmark the parser', 'Draft blog post', 'Clean up old branches', 'Migrate to Postgres 17']
 const taken = new Set()
 const people = Array.from({ length: 12 }, (_, k) => {
   const r = resident(`chat-${k}`, slotFor(`chat-${k}`, taken))
   taken.add(r.slot)
-  r.title = `Chat ${k}`
+  r.title = TITLES[k]
   apply(r, { type: 'live', on: k < 10 }, performance.now())
   return r
 })

@@ -79,7 +79,7 @@ function VillagePage() {
 }
 
 export default {
-  id: 'village',
+  id: 'hermesford',
   name: 'HermesFord - Where the Agents Live',
   register(ctx) {
     for (const type of ['tool.start', 'tool.complete', 'message.start', 'message.complete']) ctx.onEvent(type, onGatewayEvent)

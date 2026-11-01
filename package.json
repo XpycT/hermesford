@@ -1,9 +1,10 @@
 {
-  "name": "hermes-village",
+  "name": "hermesford",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
+    "install-local": "node tools/build.mjs --install",
     "dev": "node tools/build.mjs --dev && python3 -m http.server 5199 -b 127.0.0.1 -d dev",
     "test": "node src/village.test.js"
   },

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Builds the plugin (one plugin.js: the Hermes loader takes no .css and no chunks) or the dev page.
-//   node tools/build.mjs          → ~/.hermes/desktop-plugins/village/plugin.js
+//   node tools/build.mjs          → desktop/plugin.js (the plugin's Desktop half, committed)
+//   node tools/build.mjs --install → the same, then copied to ~/.hermes/desktop-plugins/hermesford/
 //   node tools/build.mjs --dev    → dev/dev.js
 // Lumina's UI CSS (vendor) is bundled with its Latin pixel fonts inlined and injected as a <style>.
 import * as esbuild from 'esbuild'
 import os from 'node:os'
+import fs from 'node:fs'
 
 const dev = process.argv.includes('--dev')
 
@@ -28,8 +30,14 @@ await esbuild.build({
   format: 'esm',
   minify: !dev,
   sourcemap: dev,
-  outfile: dev ? 'dev/dev.js' : `${os.homedir()}/.hermes/desktop-plugins/village/plugin.js`,
+  outfile: dev ? 'dev/dev.js' : 'desktop/plugin.js',
   external: dev ? [] : ['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'],
   plugins: [inlineCss],
   logLevel: 'warning',
 })
+if (!dev && process.argv.includes('--install')) {
+  const to = `${os.homedir()}/.hermes/desktop-plugins/hermesford`
+  fs.mkdirSync(to, { recursive: true })
+  fs.copyFileSync('desktop/plugin.js', `${to}/plugin.js`)
+  console.log(`installed → ${to}/plugin.js`)
+}
