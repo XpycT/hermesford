@@ -100,24 +100,24 @@ export function decide(r, now) {
 }
 
 // Streets: A and B run west–east at these z (bridges cross the river on them), the main road runs
-// north–south at x 26 and climbs the stair at z 10 onto the woodland terrace.
+// north–south at x 26 and climbs the stair (z 8–14, cut into the cliff) onto the woodland terrace.
 const ROAD_X = 26
 const STREETS = [18, 39]
-const TERRACE_Z = 10.5
+const TERRACE_Z = 8.5
 const street = z => (Math.abs(z - STREETS[0]) <= Math.abs(z - STREETS[1]) ? STREETS[0] : STREETS[1])
 
 /** Waypoints from `a` to `b` ([x, z]) along the streets, the road and the stair; ends at b. */
 export function route(a, b) {
   const pts = []
   let [x, z] = a
-  if (z < TERRACE_Z) { pts.push([ROAD_X, 8.6], [ROAD_X, 11.6]); [x, z] = [ROAD_X, 11.6] }
+  if (z < TERRACE_Z) { pts.push([ROAD_X, 6.8], [ROAD_X, 14.6]); [x, z] = [ROAD_X, 14.6] }
   const up = b[1] < TERRACE_Z
   const sA = street(z), sB = up ? STREETS[0] : street(b[1])
   const tx = up ? ROAD_X : b[0]
   pts.push([x, sA])
   if (sA !== sB) pts.push([ROAD_X, sA], [ROAD_X, sB])
   pts.push([tx, sB])
-  if (up) pts.push([ROAD_X, 11.6], [ROAD_X, 8.6])
+  if (up) pts.push([ROAD_X, 14.6], [ROAD_X, 6.8])
   pts.push(b)
   // drop zero-length legs
   return pts.filter((p, i) => { const q = i ? pts[i - 1] : a; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.3 || i === pts.length - 1 })

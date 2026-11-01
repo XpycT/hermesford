@@ -43,6 +43,24 @@ const CONTROLS = [
   { id: 'time', keys: 'T', label: 'Time of day' },
   { id: 'weather', keys: 'R', label: 'Weather' },
 ]
+/** Lumina editor's world labels (src/editor/viewport3d/Labels.js), the region style. */
+const PLATE_CSS = `
+.lvp3d-label {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: none; z-index: 0;
+  font: 600 12px/1.25 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #f4ead2;
+  padding: 3px 8px 3px 7px; border-radius: 4px; letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(20, 24, 40, 0.86), rgba(10, 12, 22, 0.86));
+  border: 1px solid rgba(201, 164, 92, 0.55); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  will-change: transform; user-select: none;
+}
+.lvp3d-label small { display: block; font-weight: 400; font-size: 10.5px; color: #c8b98f; }
+.lvp3d-label.region { border-left: 3px solid #e3b35c; text-align: left; }
+.lvp3d-label.region::after {
+  content: ''; position: absolute; left: 50%; bottom: -7px; width: 1px; height: 6px;
+  background: rgba(227, 179, 92, 0.7);
+}`
+/** What each workplace is for (village.js TOOLS → spots). */
+const PLATE_SUB = { 'The Forge': 'terminal · code', 'The Library': 'read · search', Carpentry: 'write · patch', 'Town Hall': 'delegate · kanban' }
 /** A villager's work (village.js spot) → its trade on the party frame. */
 const TRADE = { forge: 'Blacksmith', woods: 'Hunter', library: 'Scribe', carpentry: 'Carpenter', townhall: 'Messenger', well: 'Keeper', lake: 'Painter', field: 'Farmer' }
 const STATE_LABEL = { blocked: 'Waiting for you', failed: 'Error', thinking: 'Thinking', idle: 'Idle' }
@@ -332,11 +350,19 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const shown = new Map() // npc → the emote over it
   const known = new Set() // resident ids already announced
 
-  // name plates over the workplaces (level houses named other than 'Home …'), in Lumina's type
+  // name plates over the workplaces (level houses named other than 'Home …'): the Lumina editor's
+  // region label (src/editor/viewport3d/Labels.js `.lvp3d-label.region`, its CSS as is), the
+  // name and what the place is for
+  const plateCss = document.createElement('style')
+  plateCss.textContent = PLATE_CSS
+  container.append(plateCss)
   const plates = level.objects.filter(o => o.type === 'house' && o.name && !o.name.startsWith('Home')).map(o => {
     const el = document.createElement('div')
+    el.className = 'lvp3d-label region'
     el.textContent = o.name
-    el.style.cssText = "position:absolute;pointer-events:none;transform:translate(-50%,-100%);white-space:nowrap;font:20px/1 'Jersey 15',monospace;letter-spacing:.5px;color:#f5e6bd;background:rgba(24,16,10,.78);border:1px solid #b8914c;padding:2px 7px 3px;text-shadow:0 1px 0 #000"
+    const sub = document.createElement('small')
+    sub.textContent = PLATE_SUB[o.name] ?? ''
+    el.append(sub)
     container.append(el)
     const h = tileMap.getHeight(o.x, o.z) + (o.opts?.stories ?? 1) * 2.4 + 2.2
     return { el, at: new THREE.Vector3(o.x, h, o.z) }
@@ -508,6 +534,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       frames.dispose()
       window.removeEventListener('keydown', onKey)
       for (const p of plates) p.el.remove()
+      plateCss.remove()
       ui.dispose()
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointermove', onMove)

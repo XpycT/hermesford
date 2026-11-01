@@ -57,8 +57,8 @@ assert.equal(slotFor('x', new Set()), slotFor('x', new Set()))
 assert.deepEqual(route([12, 16.6], [40.8, 17.2]), [[12, 18], [40.8, 18], [40.8, 17.2]])
 assert.deepEqual(route([73, 16.6], [12, 42.3]), [[73, 18], [26, 18], [26, 39], [12, 39], [12, 42.3]])
 const w = route([52, 37.6], [19.5, 5.5])
-assert.deepEqual(w.slice(-3), [[26, 11.6], [26, 8.6], [19.5, 5.5]])
-assert.deepEqual(route([19.5, 5.5], [26.5, 23.5]).slice(0, 2), [[26, 8.6], [26, 11.6]])
+assert.deepEqual(w.slice(-3), [[26, 14.6], [26, 6.8], [19.5, 5.5]])
+assert.deepEqual(route([19.5, 5.5], [26.5, 23.5]).slice(0, 2), [[26, 6.8], [26, 14.6]])
 
 console.log('village: ok')
 
