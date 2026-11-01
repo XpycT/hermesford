@@ -15,6 +15,8 @@ import { primeShadowPrograms } from '../vendor/lumina/src/engine/world/ShadowCas
 import { World } from '../vendor/lumina/src/game/World.js'
 import { Npc } from '../vendor/lumina/src/game/Npc.js'
 import { Critters } from '../vendor/lumina/src/game/Critters.js'
+import { createEnemySheet } from '../vendor/lumina/src/engine/pixel/MonsterSprites.js'
+import { icon } from '../vendor/lumina/src/engine/ui/art/icons/combat.js'
 import { Weather } from '../vendor/lumina/src/game/Weather.js'
 import { installFogStart, setFogStart } from '../vendor/lumina/src/game/AtmosphereFog.js'
 import { UI } from '../vendor/lumina/src/engine/ui/UI.js'
@@ -87,7 +89,7 @@ function silhouetteMaterial(map) {
 const SILHOUETTE = new THREE.Color('#d9ccff')
 
 /** A villager's state → its Lumina emote bubble. */
-const EMOTE = { blocked: '!', failed: '💧', thinking: '…' } // Lumina's icons: alert, sweat drop, ellipsis
+const EMOTE = { blocked: '!', failed: 'skull', thinking: '…' } // Lumina's emotes: alert, ellipsis; the skull: its UI icon (art/icons/combat.js)
 
 /**
  * @param {HTMLElement} container
@@ -159,7 +161,29 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       scene.add(npc.roof)
     }
   }
+  // footsteps: Lumina's dust puff at the walk / run contact frames (game/Player.js)
+  for (const npc of npcs) npc.sprite.onFrameChange = (frame, anim) => {
+    if (!npc.present || (frame !== 0 && frame !== 2) || !anim || !(anim.startsWith('walk') || anim.startsWith('run'))) return
+    particles.burst('footstep', npc.position, anim.startsWith('run') ? 4 : 2)
+  }
   const critters = new Critters({ tileMap, scene, spriteManager, groups: level.objects.filter(o => o.type === 'critters') })
+  // the wild things of the woods (Lumina's monster sheets, MonsterSprites.js): boars and slimes by
+  // day, bats at night; they roam with Critters' cat brain (its class, off the level's cat)
+  // ponytail: borrows the class from an instance; needs the level's cat (one at the square)
+  const Roam = critters.cats[0]?.constructor
+  const WILD = [['boar', 13, 6.6, 3], ['boar', 44, 6.2, 3], ['slime', 20, 7.4, 2], ['slime', 34, 7.6, 2], ['slime', 76, 7, 2.5], ['slime', 72.5, 46.5, 2.5], ['slime', 76.5, 48, 2.5], ['slime', 74, 50.5, 2.5], // the last three: the hay hill
+    ['bat', 9, 6, 3.5], ['bat', 38, 5.4, 3.5], ['bat', 68, 7.4, 3], ['bat', 12, 41.6, 4]]
+  const sheets = {}
+  const wild = Roam ? WILD.map(([kind, x, z, roam], i) => {
+    const sheet = (sheets[kind] ??= createEnemySheet(kind))
+    const c = new Roam({ sheet, tileMap, x, z, seed: 900 + i, radius: 0.3, speed: kind === 'bat' ? 1.6 : 0.7, roam, opts: sheet.spriteOptions })
+    c.kind = kind
+    if (kind === 'bat') { c.sprite.mesh.position.y = 1.3; c.sprite.mesh.castShadow = false } // a flier: hovers over its shadow
+    scene.add(c.sprite)
+    spriteManager.add(c.sprite)
+    critters.all.push(c)
+    return c
+  }) : []
   for (const s of [...npcs.map(n => n.sprite), ...critters.all.map(c => c.sprite)])
     lighting.registerEmissive(s.material, SPRITE_FILL)
   const weather = new Weather({ lighting, particles, postfx, godRays, world })
@@ -172,6 +196,14 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const { emotes } = ui.useStoryUI({ Journal, Emotes, EndCard })
   // the villagers awake, top-left under the place plate (Lumina's party frames): who, doing what
   const frames = new PartyFrames(ui.root)
+  // a click on a frame opens its chat (as on the villager)
+  frames.element.style.pointerEvents = 'auto'
+  frames.element.style.cursor = 'pointer'
+  frames.element.addEventListener('click', e => {
+    const f = frames._frames.find(f => f.el.contains(e.target))
+    const r = f && residents.find(x => x.id === f.id)
+    if (r) onOpen?.(r)
+  })
   // chat titles in the party frames' face (Tiny5, 'small' tracked caps): Lumina's one pixel face
   // with Cyrillic (Jersey has none); the toast is laid out by Lumina for its 'line' role, so its
   // size and text are redone in this one
@@ -334,6 +366,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       follow(dt)
       for (const n of npcs) n.update(dt, npcCtx)
       critters.update(dt, critterCtx)
+      const night = (lighting.nightFactor ?? 0) > 0.5
+      for (const c of wild) if (c.kind === 'bat') c.sprite.visible = night
       rig.update(dt, engine.input)
       // the sharp band scales with the zoom (Game tunes focusRange 6 for distance 30)
       S.dof.focusRange = 6 * rig.distance / 30
@@ -393,6 +427,13 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   tip.el.style.zIndex = 1
   container.append(tip.el)
   let hovered = null
+  const skullArt = icon('skull', { scale: 2 }).toDataURL()
+  const skulls = npcs.map(npc => {
+    const el = Object.assign(document.createElement('img'), { src: skullArt, alt: '' })
+    el.style.cssText = 'position:absolute;transform:translate(-50%,-100%);image-rendering:pixelated;width:28px;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))'
+    container.append(el)
+    return (npc.skull = { el, at: new THREE.Vector3(), on: false, npc })
+  })
   const pv = new THREE.Vector3()
   function placePlates() {
     const npc = hovered && npcs[hovered.slot]
@@ -406,7 +447,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       }
       tip.at.copy(npc.position).setY(npc.position.y + (shown.get(npc) ? 3.4 : 2.2)) // above its emote, if any
     }
-    for (const p of [...plates, tip]) {
+    for (const k of skulls) if (k.on) k.at.copy(k.npc.position).setY(k.npc.position.y + 2.4)
+    for (const p of [...plates, tip, ...skulls]) {
       pv.copy(p.at).project(camera)
       const on = p.on !== false && pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1
       p.el.style.display = on ? '' : 'none'
@@ -484,8 +526,9 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     for (const npc of npcs) {
       const r = residents.find(x => npcs[x.slot] === npc)
       const want = (npc.present && r && EMOTE[state(r, now)]) || null
+      npc.skull.on = want === 'skull'
       if (want === (shown.get(npc) ?? null)) continue
-      if (want) emotes.show(npc.sprite, want, Infinity)
+      if (want && want !== 'skull') emotes.show(npc.sprite, want, Infinity)
       else emotes.clear(npc.sprite)
       shown.set(npc, want)
     }

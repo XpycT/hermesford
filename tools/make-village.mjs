@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Builds levels/village.json ("Hermesford") with Lumina's LevelFormat helpers (vendor/lumina),
+ * Builds levels/village.json ("HermesFord") with Lumina's LevelFormat helpers (vendor/lumina),
  * the way Lumina's own tools/make-sample-hamlet.mjs does, tiered like its Emberfall: a high
  * woodland terrace (a stair cut into its cliff) under a rock ridge, a windmill in the lower eastern
  * woods, a river falling off the terrace into a pool and running south under two bridges, the
@@ -33,7 +33,7 @@ const OUT = path.resolve(root, String(args.out ?? FILE))
 
 const W = 84
 const D = 54
-const level = createEmptyLevel({ name: 'Hermesford', width: W, depth: D, fill: 'g', level: 2, border: 2 })
+const level = createEmptyLevel({ name: 'HermesFord', width: W, depth: D, fill: 'g', level: 2, border: 2 })
 level.subtitle = 'Where the Agents Live'
 level.author = 'Hermes Village'
 level.description = 'A river village under a wooded terrace: every villager is a Hermes chat.'
@@ -223,6 +223,13 @@ addObject(level, 'garland', 30.8, 17.6, { x1: 37.2, z1: 17.6, opts: { kind: 'pen
 addObject(level, 'bench', 8.6, 18.4, { rotation: S_, opts: { length: 1.6 } })
 addObject(level, 'flowerbox', 10.6, 25.6, { opts: { length: 1.2 } })
 addObject(level, 'bench', 73.4, 22.2, { rotation: S_, opts: { length: 1.6 } })
+// benches along the lanes and the shores, flower pots (a short flower box: Lumina has no vase) by
+// the benches, the square's corners and the bridge heads
+for (const [x, z, a] of [[16, 26.6, S_], [44.6, 23.4, S_], [9.8, 41.4, S_], [16.4, 41.4, S_], [36.4, 41.2, S_], [50.4, 41, S_], [66.6, 26.4, S_], [24.6, 31.6, E_]])
+  addObject(level, 'bench', x, z, { rotation: a, opts: { length: 1.4 } })
+for (const [x, z] of [[14.8, 26.6], [17.2, 26.6], [43.4, 23.4], [8.6, 41.4], [17.6, 41.4], [51.6, 41], [22.6, 21.8], [35.8, 26.4],
+  [55.6, 22.6], [55.6, 25.4], [63.4, 22.6], [63.2, 41.6], [55.4, 41.4], [68, 27.2], [7.2, 18.4], [10, 18.4], [74.8, 22.2]])
+  addObject(level, 'flowerbox', x, z, { opts: { length: 0.6 } })
 addObject(level, 'marketStall', 75.4, 28.4, { rotation: W_, opts: { cloth: 'cloth_stripe', width: 2.6 } })
 // the hay hill: hay, sacks, a signpost at its stair (nothing tall: south of a lane it would hide it)
 addObject(level, 'haystack', 69.5, 44.2, { opts: { size: 0.9 } })
@@ -293,13 +300,13 @@ addObject(level, 'emitter', 12, 47, { preset: 'fireflies', size: [16, 2, 9], cou
 addObject(level, 'emitter', RX, 12, { preset: 'mist', size: [7, 2, 4], count: 18, dy: 0.6 })
 addObject(level, 'emitter', 40, 6, { preset: 'leaves', size: [74, 4, 7], count: 44, dy: 3 })
 addObject(level, 'emitter', 74, 45, { preset: 'petals', size: [14, 3, 7], count: 22, dy: 1.6 })
-addObject(level, 'region', 0, 0, { name: 'The Woodland', sub: 'Hermesford', minX: 0, maxX: W, minZ: 0, maxZ: 10.5, minY: 1.3 })
-addObject(level, 'region', 0, 0, { name: 'Mirror Lake', sub: 'Hermesford', minX: 0, maxX: 22, minZ: 41, maxZ: D })
-addObject(level, 'region', 0, 0, { name: 'Willow End', sub: 'Hermesford', minX: 0, maxX: 17, minZ: 11, maxZ: 31 })
-addObject(level, 'region', 0, 0, { name: 'Eastbank', sub: 'Hermesford', minX: RIVER1 + 2, maxX: W, minZ: 11, maxZ: 36 })
-addObject(level, 'region', 0, 0, { name: 'Village Square', sub: 'Hermesford', minX: 22, maxX: 38, minZ: 17, maxZ: 29 })
-addObject(level, 'region', 0, 0, { name: 'River Hermes', sub: 'Hermesford', minX: RIVER0 - 3, maxX: RIVER1 + 3, minZ: 10, maxZ: D })
-addObject(level, 'region', 0, 0, { name: 'Hermesford', sub: '', minX: 0, maxX: W, minZ: 0, maxZ: D })
+addObject(level, 'region', 0, 0, { name: 'The Woodland', sub: 'HermesFord', minX: 0, maxX: W, minZ: 0, maxZ: 10.5, minY: 1.3 })
+addObject(level, 'region', 0, 0, { name: 'Mirror Lake', sub: 'HermesFord', minX: 0, maxX: 22, minZ: 41, maxZ: D })
+addObject(level, 'region', 0, 0, { name: 'Willow End', sub: 'HermesFord', minX: 0, maxX: 17, minZ: 11, maxZ: 31 })
+addObject(level, 'region', 0, 0, { name: 'Eastbank', sub: 'HermesFord', minX: RIVER1 + 2, maxX: W, minZ: 11, maxZ: 36 })
+addObject(level, 'region', 0, 0, { name: 'Village Square', sub: 'HermesFord', minX: 22, maxX: 38, minZ: 17, maxZ: 29 })
+addObject(level, 'region', 0, 0, { name: 'River Hermes', sub: 'HermesFord', minX: RIVER0 - 3, maxX: RIVER1 + 3, minZ: 10, maxZ: D })
+addObject(level, 'region', 0, 0, { name: 'HermesFord', sub: '', minX: 0, maxX: W, minZ: 0, maxZ: D })
 
 level.spawn = { x: 26, z: 21, facing: 'up' }
 
@@ -339,4 +346,4 @@ if (args.check) {
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 fs.writeFileSync(OUT, text)
 const s = levelStats(out)
-console.log(`Hermesford → ${rel}: ${s.width}×${s.depth}, ${s.objects} objects, ${s.water} water tiles`, s.counts)
+console.log(`HermesFord → ${rel}: ${s.width}×${s.depth}, ${s.objects} objects, ${s.water} water tiles`, s.counts)
