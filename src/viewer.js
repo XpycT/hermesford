@@ -19,9 +19,10 @@ import { Weather } from '../vendor/lumina/src/game/Weather.js'
 import { installFogStart, setFogStart } from '../vendor/lumina/src/game/AtmosphereFog.js'
 import { UI } from '../vendor/lumina/src/engine/ui/UI.js'
 import { Emotes } from '../vendor/lumina/src/engine/ui/Emotes.js'
+import { PartyFrames } from '../vendor/lumina/src/engine/ui/PartyFrames.js'
 import { phaseName } from '../vendor/lumina/src/engine/ui/HUD.js'
 import { renderLevelMap } from '../vendor/lumina/src/engine/level/LevelMap.js'
-import { decide, route, state, SPOTS } from './village.js'
+import { decide, route, state, toolSpot, hash, SPOTS } from './village.js'
 import { CAMERA, SUN_PATH, MOON_PATH, KEYFRAME_OVERRIDES, SPRITE_FILL } from '../vendor/lumina/src/game/config.js'
 
 const DEG = Math.PI / 180
@@ -35,6 +36,30 @@ const CONTROLS = [
   { id: 'time', keys: 'T', label: 'Time of day' },
   { id: 'weather', keys: 'R', label: 'Weather' },
 ]
+/** A villager's work (village.js spot) → its trade on the party frame. */
+const TRADE = { forge: 'Blacksmith', woods: 'Hunter', library: 'Scribe', carpentry: 'Carpenter', townhall: 'Messenger', well: 'Keeper', lake: 'Painter', field: 'Farmer' }
+const STATE_LABEL = { blocked: 'Waiting for you', failed: 'Error', thinking: 'Thinking', idle: 'Idle' }
+const STATE_ORDER = { blocked: 0, failed: 1, tool: 2, thinking: 3, idle: 4 }
+const MAX_FRAMES = 6
+
+/**
+ * Lumina's x-ray silhouette (game/Player.js `silhouetteMaterial`, not exported there; copied as is):
+ * a pale copy of a sprite quad drawn only where something hides it (depthFunc GREATER), pulled
+ * 1.3 u toward the camera so only real occluders (roofs, canopies, not grass) reveal it.
+ */
+function silhouetteMaterial(map) {
+  const m = new THREE.MeshBasicMaterial({ map, color: new THREE.Color('#d9ccff'), transparent: true, opacity: 0.55, depthWrite: true, depthFunc: THREE.GreaterDepth, fog: false })
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>',
+      '#include <project_vertex>\n\tmvPosition.xyz *= max( 0.0, 1.0 - 1.3 / length( mvPosition.xyz ) );\n\tgl_Position = projectionMatrix * mvPosition;')
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n\tif ( sampledDiffuseColor.a < 0.5 ) discard;\n\tfloat silL = sqrt( dot( sampledDiffuseColor.rgb, vec3( 0.299, 0.587, 0.114 ) ) );\n\tdiffuseColor = vec4( diffuse * ( 0.42 + 0.8 * silL ), opacity );')
+  }
+  m.customProgramCacheKey = () => 'emberfall-player-silhouette-v2'
+  return m
+}
+const SILHOUETTE = new THREE.Color('#d9ccff')
+
 /** A villager's state → its Lumina emote bubble. */
 const EMOTE = { blocked: '!', failed: '#', thinking: '…' }
 
@@ -91,6 +116,11 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     const npc = new Npc({ def: { id: o.id, name: o.name || 'Villager', preset: o.preset || 'villager', home: [o.x, o.z], wander: o.wander ?? 1.2, speed: o.speed ?? 1, facing: o.facing || 'down' }, tileMap, sheetCache })
     npc.door = [o.x, o.z]
     npc.setPresent(false) // shown once a chat lives here
+    // seen through roofs and canopies (Lumina's player x-ray)
+    const sil = new THREE.Mesh(npc.sprite.mesh.geometry, silhouetteMaterial(npc.sprite.texture))
+    sil.renderOrder = 60
+    npc.sprite.mesh.add(sil)
+    npc.silhouette = sil
     scene.add(npc.sprite)
     spriteManager.add(npc.sprite)
     npcs.push(npc)
@@ -105,6 +135,22 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   // world map, toasts, emote bubbles. English only: its pixel fonts have no Cyrillic.
   const ui = new UI(container, { lang: 'en' })
   const emotes = new Emotes(ui.root)
+  // the villagers awake, top-left under the place plate (Lumina's party frames): who, doing what
+  const frames = new PartyFrames(ui.root)
+  let framesAt = 0
+  function updateFrames(now) {
+    if (now - framesAt < 250) return
+    framesAt = now
+    const list = residents.map(r => ({ r, st: state(r, now) })).filter(x => x.st !== 'asleep')
+      .sort((a, b) => STATE_ORDER[a.st] - STATE_ORDER[b.st] || a.r.slot - b.r.slot).slice(0, MAX_FRAMES)
+    frames.update(list.map(({ r, st }) => ({
+      id: r.id,
+      name: r.title.length > 22 ? r.title.slice(0, 21) + '…' : r.title,
+      color: `hsl(${hash(r.id) % 360} 55% 62%)`,
+      cls: st === 'tool' ? TRADE[toolSpot(r.tool)] : STATE_LABEL[st],
+      tactic: st === 'tool' ? r.tool : '',
+    })))
+  }
   const regions = level.objects.filter(o => o.type === 'region')
   const levelMap = renderLevelMap(level)
   ui.minimap.setMap(levelMap, { view: 34, level })
@@ -238,6 +284,9 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     }
     for (const npc of npcs) if (!bound.has(npc) && npc.present) { paths.delete(npc); npc.setPresent(false) }
     placePlates()
+    updateFrames(now)
+    const sk = THREE.MathUtils.lerp(1, 0.5, lighting.nightFactor ?? 0)
+    for (const n of npcs) n.silhouette.material.color.copy(SILHOUETTE).multiplyScalar(sk)
     // emote bubbles over heads
     for (const npc of npcs) {
       const r = residents.find(x => npcs[x.slot] === npc)
@@ -346,6 +395,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     dispose() {
       io.disconnect()
       emotes.dispose()
+      frames.dispose()
       for (const p of plates) p.el.remove()
       ui.dispose()
       el.removeEventListener('pointerdown', onDown)
