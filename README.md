@@ -1,4 +1,4 @@
-# HermesFord — Where the Agents Live
+# HermesFord: Where the Agents Live
 
 A living HD-2D pixel-art village for [Hermes Desktop](https://hermes-agent.nousresearch.com/).
 Every Hermes chat is a villager. Open the **HermesFord** page from the sidebar to see at a glance
@@ -6,7 +6,7 @@ who is working, who is waiting for you, who failed and who is asleep.
 
 ![HermesFord at golden hour: the village square with the Library, the Town Hall and the Forge](assets/banner.jpg)
 
-It is an **indicator, not a game**. The villagers only act out what the agents really do: no
+It is an indicator, not a game. The villagers only act out what the agents really do: no
 fake work and no controls except the camera. Clicking a villager opens its chat.
 
 | | |
@@ -68,7 +68,7 @@ After that, **HermesFord** appears in the sidebar and opens the `/village` page.
 **Manual:** copy `desktop/plugin.js` to `~/.hermes/desktop-plugins/hermesford/plugin.js` and turn
 it on under Capabilities → Plugins.
 
-## What it does and does not do (disclosure)
+## What it does and does not do
 
 - **Desktop-only.** `desktop/plugin.js` runs inside the plugin SDK surface. It registers no agent
   tools, hooks, middleware or env vars.
@@ -87,7 +87,7 @@ it on under Capabilities → Plugins.
 
 ## Credits
 
-HermesFord is built on **[Luminati](https://gitlab.com/stubborn-hug/lumina)** — an open-source
+HermesFord is built on **[Luminati](https://gitlab.com/stubborn-hug/lumina)**, an open-source
 2.5D pixel-art engine for three.js inspired by Square Enix's HD-2D games (MIT, © 2026 Luminati).
 The world, lighting, post-processing, villagers, critters, monster sprites, pathfinding (`Nav`) and
 the pixel-art UI are Luminati's. A snapshot lives unmodified in `vendor/lumina/` with its

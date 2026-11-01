@@ -4,11 +4,10 @@ version: 1.0.0
 author: XpycT
 homepage: https://github.com/XpycT/hermesford
 description: >
-  HermesFord — Where the Agents Live. A living HD-2D pixel-art village page for Hermes
-  Desktop: every chat is a villager who walks to the forge, library, woods or town hall
-  depending on the tool its agent is running, waits at the town hall when the chat needs
-  you, and sleeps at home when the chat is idle. Built on the Luminati engine (MIT).
-  Desktop-only (desktop/plugin.js inside the plugin SDK surface); no agent tools, hooks,
-  middleware or env vars.
+  An HD-2D pixel-art village page for Hermes Desktop: every chat is a villager who walks to the
+  forge, library, woods or town hall depending on the tool its agent is running, waits at the
+  town hall when the chat needs you, and goes home to sleep when the chat is not active. Click a
+  villager to open its chat. Built on the Luminati engine (MIT). Desktop-only (desktop/plugin.js
+  inside the plugin SDK surface); no agent tools, hooks, middleware or env vars.
 tags: [desktop, sessions, visualization, pixel-art, game]
 requires_hermes: ">=0.22.5"
