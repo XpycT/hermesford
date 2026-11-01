@@ -65,12 +65,12 @@ function VillagePage() {
 
 export default {
   id: 'village',
-  name: 'Village',
+  name: 'HermesFord - Where the Agents Live',
   register(ctx) {
     for (const type of ['tool.start', 'tool.complete', 'message.start', 'message.complete']) ctx.onEvent(type, onGatewayEvent)
     ctx.registerMany([
       { id: 'page', area: ROUTES_AREA, data: { path: '/village' }, render: () => jsx(VillagePage, {}) },
-      { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: '/village', label: 'Village', codicon: 'home' } },
+      { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: '/village', label: 'HermesFord', codicon: 'home' } },
     ])
   },
 }
