@@ -19,6 +19,8 @@ import { Weather } from '../vendor/lumina/src/game/Weather.js'
 import { installFogStart, setFogStart } from '../vendor/lumina/src/game/AtmosphereFog.js'
 import { UI } from '../vendor/lumina/src/engine/ui/UI.js'
 import { Emotes } from '../vendor/lumina/src/engine/ui/Emotes.js'
+import { Journal } from '../vendor/lumina/src/engine/ui/Journal.js'
+import { EndCard } from '../vendor/lumina/src/engine/ui/EndCard.js'
 import { PartyFrames } from '../vendor/lumina/src/engine/ui/PartyFrames.js'
 import { phaseName } from '../vendor/lumina/src/engine/ui/HUD.js'
 import { renderLevelMap } from '../vendor/lumina/src/engine/level/LevelMap.js'
@@ -61,7 +63,7 @@ function silhouetteMaterial(map) {
 const SILHOUETTE = new THREE.Color('#d9ccff')
 
 /** A villager's state → its Lumina emote bubble. */
-const EMOTE = { blocked: '!', failed: '#', thinking: '…' }
+const EMOTE = { blocked: '!', failed: '💧', thinking: '…' } // Lumina's icons: alert, sweat drop, ellipsis
 
 /**
  * @param {HTMLElement} container
@@ -134,7 +136,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   // Lumina's UI: place plate + clock + minimap (top), controls legend (bottom-left), area banner,
   // world map, toasts, emote bubbles. English only: its pixel fonts have no Cyrillic.
   const ui = new UI(container, { lang: 'en' })
-  const emotes = new Emotes(ui.root)
+  // the story UI as Lumina's sandbox/story_ui sets it up: ui.update moves the emote bubbles
+  const { emotes } = ui.useStoryUI({ Journal, Emotes, EndCard })
   // the villagers awake, top-left under the place plate (Lumina's party frames): who, doing what
   const frames = new PartyFrames(ui.root)
   let framesAt = 0
@@ -231,6 +234,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   let residents = []
   const paths = new Map() // npc → remaining waypoints
   const shown = new Map() // npc → the emote over it
+  const known = new Set() // resident ids already announced
 
   // name plates over the workplaces (level houses named other than 'Home …'), in Lumina's type
   const plates = level.objects.filter(o => o.type === 'house' && o.name && !o.name.startsWith('Home')).map(o => {
@@ -287,6 +291,14 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     updateFrames(now)
     const sk = THREE.MathUtils.lerp(1, 0.5, lighting.nightFactor ?? 0)
     for (const n of npcs) n.silhouette.material.color.copy(SILHOUETTE).multiplyScalar(sk)
+    // a new chat moved in: Lumina's quest toast (the first roster is the village as found, no toasts)
+    if (residents.length) {
+      for (const r of residents) {
+        if (known.has(r.id)) continue
+        if (known.size && r.live) ui.hud.toast(`New villager: ${r.title}`, 4, { kind: 'quest' })
+        known.add(r.id)
+      }
+    }
     // emote bubbles over heads
     for (const npc of npcs) {
       const r = residents.find(x => npcs[x.slot] === npc)
