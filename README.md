@@ -14,6 +14,26 @@ fake work and no controls except the camera. Clicking a villager opens its chat.
 | ![The village square at midday](assets/square.jpg) | ![The village at night: lit windows and lamps](assets/night.jpg) |
 | ![Hover a villager: its chat title, trade and current tool](assets/hover.jpg) | ![Slimes bouncing on the hay hill](assets/hayhill.jpg) |
 
+## Seasons
+
+The village follows the calendar: spring, summer, autumn or winter, by today's date. Press **Y**
+to change the season: the screen fades to black and the village comes back re-dressed under the
+season's banner. The camera stays where it was.
+
+| | |
+| --- | --- |
+| ![Spring: young grass, daisies and cherry trees in blossom](assets/season-spring.jpg) | ![Summer: the village as drawn, every tree green](assets/season-summer.jpg) |
+| ![Autumn: russet grass, fallen leaves, red maples and golden birches](assets/season-autumn.jpg) | ![Winter: snow on the ground and roofs, icicles, snowy pines and bare trees](assets/season-winter.jpg) |
+
+- **Spring:** young grass and meadow flowers, cherries in blossom, petals in the air.
+- **Summer:** the village as drawn.
+- **Autumn:** russet grass, fallen leaves, stubble on the field, red maples and golden birches.
+- **Winter:** snow on the ground and roofs, trodden paths, frosted cobbles, icicles on the eaves,
+  snowy pines and bare trees, falling snow. The snow stays whatever the weather (R).
+
+The seasons are Luminati's season kit (its terrain, trees, ground sprites and sky) applied to the
+village map, so nothing new is drawn. The river does not freeze.
+
 ## What the villagers do
 
 The plugin polls `session.active_list` / `session.list` and listens to `tool.*` / `message.*`
@@ -45,7 +65,8 @@ Other features:
 - **Follow a villager** (◀ ▶ at the bottom) makes the camera follow one chat.
 - The time of day and lighting follow your real clock. The page also has a minimap and a world
   map (Tab).
-- Drag to pan, scroll or pinch to zoom, Q/E to rotate.
+- Drag to pan, scroll or pinch to zoom, Q/E to rotate, T for the time of day, R for the weather,
+  Y for the season.
 - Rendering pauses when the page is hidden.
 
 ## Installation
@@ -99,7 +120,7 @@ follows the layouts of Luminati's *Emberfall* and *Starfall Vale*.
 ```bash
 npm install
 npm run dev            # dev page with fake chats: http://127.0.0.1:5199/?hour=17
-npm test               # village simulation asserts
+npm test               # village simulation and seasons asserts
 npm run build          # → desktop/plugin.js
 npm run install-local  # build and copy to ~/.hermes/desktop-plugins/hermesford/
 node tools/make-village.mjs                                         # regenerate levels/village.json
@@ -110,12 +131,12 @@ node vendor/lumina/tools/check-level.mjs levels/village.json --strict # Luminati
 | --- | --- |
 | `src/plugin.js` | registers the page and the sidebar entry; Hermes data → villagers |
 | `src/viewer.js` | hosts the Luminati level: engine, light, post-FX, villagers, critters, UI |
-| `src/village.js` | the pure simulation: chat state → where to go and what to do |
+| `src/village.js` | the pure simulation: chat state → where to go and what to do; the seasons (`seasonal`) |
 | `tools/make-village.mjs` | generates the map `levels/village.json` |
 | `desktop/plugin.js` | the built plugin (committed: it is what Hermes installs) |
 
-Dev-page query params: `?hour=N` (time of day), `?fake=0` (no fake events), `?panel=0` (hide the
-event panel).
+Dev-page query params: `?hour=N` (time of day), `?season=spring|summer|autumn|winter`,
+`?fake=0` (no fake events), `?panel=0` (hide the event panel).
 
 ## License
 
