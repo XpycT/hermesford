@@ -1,6 +1,7 @@
 // node src/village.test.js
 import assert from 'node:assert/strict'
-import { toolSpot, resident, apply, state, decide, slotFor, SLOTS } from './village.js'
+import { toolSpot, resident, apply, state, decide, slotFor, SLOTS, seasonal, seasonOn } from './village.js'
+import village from '../levels/village.json' with { type: 'json' }
 
 // tools → work
 assert.equal(toolSpot('terminal'), 'forge')
@@ -87,3 +88,19 @@ syncRoster(e, [{ id: 'x', session_key: 'x', status: 'idle', message_count: 0 }, 
 assert.deepEqual([...e.keys()].sort(), ['w', 'y'])
 
 console.log('adapter: ok')
+
+// seasons: by the calendar; the level re-dressed, the original untouched
+assert.deepEqual([0, 2, 3, 5, 6, 8, 9, 11].map(m => seasonOn(new Date(2026, m, 15))),
+  ['winter', 'spring', 'spring', 'summer', 'summer', 'autumn', 'autumn', 'winter'])
+const w = seasonal(village, 'winter')
+assert.equal(w.legend.g.top, 'snow_top'); assert.equal(w.legend.g.lip, 'snow_side'); assert.equal(w.legend.c.top, 'frost_cobble')
+assert.equal(w.environment.season, 'winter'); assert.equal(w.environment.weather, 'snow')
+assert.ok(w.objects.filter(o => o.type === 'tree').every(o => ['snowpine', 'bare'].includes(o.opts.kind)))
+assert.ok(w.objects.filter(o => o.type === 'house').every(o => o.opts.icicles))
+assert.ok(!w.objects.some(o => o.preset === 'fireflies'))
+assert.equal(village.legend.g.top, 'grass'); assert.equal(village.environment.season, undefined)
+const su = seasonal(village, 'summer')
+assert.equal(su.environment.season, undefined); assert.equal(su.legend.g.top, 'grass')
+assert.ok(!su.objects.some(o => ['autumn', 'maple'].includes(o.opts?.kind)))
+assert.equal(seasonal(village, 'autumn').legend.F.top, 'stubble')
+console.log('seasons: ok')

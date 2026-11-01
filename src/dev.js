@@ -1,4 +1,4 @@
-// Dev page: a level in the viewer outside Hermes. ?level=village|sample-hamlet  ?hour=N  ?fake=0 (no auto events)
+// Dev page: a level in the viewer outside Hermes. ?level=village|sample-hamlet  ?hour=N  ?season=winter|spring|summer|autumn  ?fake=0 (no auto events)
 // A fake event stream drives 12 residents; the panel (top-left) fires events at one of them.
 import { createViewer } from './viewer.js'
 import { resident, apply, state, slotFor } from './village.js'
@@ -64,6 +64,6 @@ if (q.get('fake') !== '0')
     fire(r, ev)
   }, 1500)
 
-createViewer(document.getElementById('wrap'), level, { hour: q.has('hour') ? Number(q.get('hour')) : null })
+createViewer(document.getElementById('wrap'), level, { hour: q.has('hour') ? Number(q.get('hour')) : null, season: q.get('season') ?? undefined })
   .then(v => { v.residents = people; window.__v = v; window.__people = people })
   .catch(e => { window.__errs.push(String(e?.stack || e)); throw e })

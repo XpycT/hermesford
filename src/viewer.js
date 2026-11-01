@@ -30,7 +30,9 @@ import { glyph, dimGlyph, plate } from '../vendor/lumina/src/engine/ui/art/piece
 import { pal } from '../vendor/lumina/src/engine/ui/art/palette.js'
 import { phaseName } from '../vendor/lumina/src/engine/ui/HUD.js'
 import { renderLevelMap } from '../vendor/lumina/src/engine/level/LevelMap.js'
-import { decide, state, toolSpot, hash, SPOTS } from './village.js'
+import { decide, state, toolSpot, hash, SPOTS, SEASONS, SEASON_BANNER, seasonOn, seasonal } from './village.js'
+import { loadSeasonLook, showClimateSky } from '../vendor/lumina/src/game/Climate.js'
+import { Fader } from '../vendor/lumina/src/engine/ui/Fader.js'
 import { Nav } from '../vendor/lumina/src/game/combat/Nav.js'
 import { CAMERA, SUN_PATH, MOON_PATH, KEYFRAME_OVERRIDES, SPRITE_FILL } from '../vendor/lumina/src/game/config.js'
 
@@ -45,6 +47,7 @@ const CONTROLS = [
   { id: 'map', keys: 'N/Tab', label: 'World map' },
   { id: 'time', keys: 'T', label: 'Time of day' },
   { id: 'weather', keys: 'R', label: 'Weather' },
+  { id: 'season', keys: 'Y', label: 'Season' },
 ]
 /** Lumina editor's world labels (src/editor/viewport3d/Labels.js), the region style. */
 const PLATE_CSS = `
@@ -96,7 +99,7 @@ const EMOTE = { blocked: '!', failed: 'skull', thinking: '…' } // Lumina's emo
  * @param {object} rawLevel luminati-level JSON
  * @param {{ hour?: number|null }} [opts] fixed hour (dev); default = the local clock
  */
-export async function createViewer(container, rawLevel, { hour = null } = {}) {
+async function mount(container, rawLevel, { hour = null, bannersShown = new Set(), known = new Set() } = {}) {
   const { level } = normalizeLevel(rawLevel)
   const env = level.environment ?? {}
   const cam = { ...CAMERA, ...(env.camera ?? {}) }
@@ -110,6 +113,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const lighting = new LightingSystem(engine, { timeOfDay: clockHour(hour), shadowExtent: 26, sunPath: SUN_PATH, moonPath: MOON_PATH, keyframes })
   lighting.sky.lowerClouds = 0.25
   lighting.timeSpeed = 0 // we drive the hour from the real clock
+  // the season's sky retouches (Lumina's SeasonLook keyframes over ours)
+  if (env.season) { await loadSeasonLook(); showClimateSky(lighting, null, env.season) }
   const particles = new Particles(scene)
   const godRays = new GodRays({ gain: 0.2 })
   scene.add(godRays.object)
@@ -187,6 +192,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   for (const s of [...npcs.map(n => n.sprite), ...critters.all.map(c => c.sprite)])
     lighting.registerEmissive(s.material, SPRITE_FILL)
   const weather = new Weather({ lighting, particles, postfx, godRays, world })
+  if (env.season === 'winter') weather.snowFloor = 0.9 // snow lies whatever the weather
   lighting.followTarget(focus)
 
   // Lumina's UI: place plate + clock + minimap (top), controls legend (bottom-left), area banner,
@@ -313,14 +319,13 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   ui.worldMap.setMap(levelMap, { title: level.name, subtitle: level.subtitle ?? '', regions })
   const mapState = { player: focus.position, facing: new THREE.Vector3(0, 0, 1), view: { x: 0, z: -1 }, npcs: [], markers: world.mapMarkers() }
   let region = null
-  const bannersShown = new Set()
   let liveClock = hour == null
   ui.fontsReady.then(() => {
     ui.fontsReady.done = true
     ui.hud.setControls(CONTROLS)
     ui.hud.setLocation(level.name, level.subtitle ?? '')
     ui.hud.showHelp(true)
-    ui.banner.show(level.name, level.subtitle ?? '', { duration: 3.2 })
+    if (!bannersShown.has(level.name)) ui.banner.show(level.name, level.subtitle ?? '', { duration: 3.2 })
     bannersShown.add(level.name)
   })
   function updateUi(dt) {
@@ -330,6 +335,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     else if (ui.worldMap.isOpen && input.actionPressed('cancel')) ui.worldMap.close()
     if (input.actionPressed('time')) { liveClock = false; ui.hud.toast(phaseName(weather.cycleTime().id), 1.6) }
     if (input.actionPressed('weather')) ui.hud.toast(`Weather: ${weather.cycleWeather()}`, 1.6)
+    if (input.actionPressed('season')) onSeason?.()
     ui.hud.setTime(lighting.timeOfDay)
     // the place under the camera (Game._updateRegion: first matching region wins)
     const p = focus.position
@@ -354,6 +360,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   const critterCtx = { player: away, threats: [away] }
   const view = { focus: rig.focusPoint, camera }
   let onTick = null
+  let onSeason = null
+  engine.input.bindings.season = ['KeyY']
 
   engine.addSystem(lighting, -10)
   engine.addSystem({
@@ -401,7 +409,6 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   let residents = []
   const paths = new Map() // npc → remaining waypoints
   const shown = new Map() // npc → the emote over it
-  const known = new Set() // resident ids already announced
 
   // name plates over the workplaces (level houses named other than 'Home …'): the Lumina editor's
   // region label (src/editor/viewport3d/Labels.js `.lvp3d-label.region`, its CSS as is), the
@@ -516,9 +523,10 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     for (const n of npcs) n.silhouette.material.color.copy(SILHOUETTE).multiplyScalar(sk)
     // a new chat moved in: Lumina's quest toast (the first roster is the village as found, no toasts)
     if (residents.length) {
+      const first = !known.size
       for (const r of residents) {
         if (known.has(r.id)) continue
-        if (known.size && r.live) titleToast(`New villager: ${r.title}`, 4, 'quest')
+        if (!first && r.live) titleToast(`New villager: ${r.title}`, 4, 'quest')
         known.add(r.id)
       }
     }
@@ -628,6 +636,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     set residents(list) { residents = list },
     /** click on a villager → fn(resident) */
     set onOpen(fn) { onOpen = fn },
+    set onSeason(fn) { onSeason = fn },
     ui,
     setHour(h) { liveClock = h == null; lighting.timeOfDay = clockHour(h) },
     dispose() {
@@ -648,6 +657,64 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       postfx.dispose?.()
       engine.dispose?.()
     }
+  }
+}
+
+/**
+ * The village in `container`, dressed for a season (default: the calendar's). Y fades to black,
+ * rebuilds it for the next season (the camera kept) and fades back under the season's banner.
+ * ponytail: a full rebuild (~1–2 s behind the black); textures are baked into merged meshes.
+ */
+export async function createViewer(container, rawLevel, { hour = null, season = seasonOn(new Date()) } = {}) {
+  const fader = new Fader(container)
+  fader.element.style.zIndex = 100 // over Lumina's UI root (50)
+  let v = null, residents = [], onOpen = null, onTick = null, busy = false, gone = false
+  // across rebuilds: a season change is no arrival (banners) and brings no new villagers (toasts)
+  const bannersShown = new Set(), known = new Set()
+  async function show() {
+    const nv = await mount(container, seasonal(rawLevel, season), { hour, bannersShown, known })
+    if (gone) return nv.dispose()
+    Object.assign(nv, { residents, onOpen: r => onOpen?.(r), onTick: dt => onTick?.(dt), onSeason: next })
+    v = nv
+  }
+  async function next() {
+    if (busy || !v) return
+    busy = true
+    season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]
+    const { rig, focus } = v, cam = { yaw: rig.yawTarget, distance: rig.distanceTarget, at: focus.position.clone() }
+    try {
+      await fader.fadeOut(0.8)
+      v.dispose()
+      v = null
+      await show()
+      if (!v) return
+      v.rig.yaw = v.rig.yawTarget = cam.yaw
+      v.rig.distance = v.rig.distanceTarget = cam.distance
+      v.focus.position.copy(cam.at)
+      v.rig.snap()
+      v.ui.banner.show(...SEASON_BANNER[season], { duration: 4 })
+      await fader.fadeIn(1.2)
+    } catch (err) {
+      console.error('[village] season change failed', err)
+    } finally {
+      busy = false
+    }
+  }
+  await show()
+  return {
+    get current() { return v },
+    get season() { return season },
+    set residents(list) { residents = list; if (v) v.residents = list },
+    set onOpen(fn) { onOpen = fn },
+    set onTick(fn) { onTick = fn },
+    setHour(h) { hour = h; v?.setHour(h) },
+    nextSeason: next,
+    dispose() {
+      gone = true
+      v?.dispose()
+      v = null
+      fader.dispose()
+    },
   }
 }
 
