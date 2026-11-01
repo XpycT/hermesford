@@ -1,6 +1,6 @@
 // node src/village.test.js
 import assert from 'node:assert/strict'
-import { toolSpot, resident, apply, state, decide, slotFor, route, SLOTS } from './village.js'
+import { toolSpot, resident, apply, state, decide, slotFor, SLOTS } from './village.js'
 
 // tools → work
 assert.equal(toolSpot('terminal'), 'forge')
@@ -52,13 +52,6 @@ const taken = new Set()
 for (let k = 0; k < SLOTS; k++) { const sl = slotFor('id' + k, taken); assert.ok(sl >= 0 && !taken.has(sl)); taken.add(sl) }
 assert.equal(slotFor('one-more', taken), -1)
 assert.equal(slotFor('x', new Set()), slotFor('x', new Set()))
-
-// routes: across the streets via the road; into the woods via the stair
-assert.deepEqual(route([12, 16.6], [40.8, 17.2]), [[12, 18], [40.8, 18], [40.8, 17.2]])
-assert.deepEqual(route([73, 16.6], [12, 42.3]), [[73, 18], [26, 18], [26, 39], [12, 39], [12, 42.3]])
-const w = route([52, 37.6], [19.5, 5.5])
-assert.deepEqual(w.slice(-3), [[26, 14.6], [26, 6.8], [19.5, 5.5]])
-assert.deepEqual(route([19.5, 5.5], [26.5, 23.5]).slice(0, 2), [[26, 6.8], [26, 14.6]])
 
 console.log('village: ok')
 

@@ -28,7 +28,8 @@ import { glyph, dimGlyph, plate } from '../vendor/lumina/src/engine/ui/art/piece
 import { pal } from '../vendor/lumina/src/engine/ui/art/palette.js'
 import { phaseName } from '../vendor/lumina/src/engine/ui/HUD.js'
 import { renderLevelMap } from '../vendor/lumina/src/engine/level/LevelMap.js'
-import { decide, route, state, toolSpot, hash, SPOTS } from './village.js'
+import { decide, state, toolSpot, hash, SPOTS } from './village.js'
+import { Nav } from '../vendor/lumina/src/game/combat/Nav.js'
 import { CAMERA, SUN_PATH, MOON_PATH, KEYFRAME_OVERRIDES, SPRITE_FILL } from '../vendor/lumina/src/game/config.js'
 
 const DEG = Math.PI / 180
@@ -149,6 +150,14 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     scene.add(npc.sprite)
     spriteManager.add(npc.sprite)
     npcs.push(npc)
+    // its home (npcs r00..r15 ↔ 'Home 1..16'): the window light at the door and a spot over the roof
+    const k = npcs.length - 1
+    const home = level.objects.find(h => h.type === 'house' && h.name === `Home ${k + 1}`)
+    if (home) {
+      npc.roof = new THREE.Object3D()
+      npc.roof.position.set(home.x, tileMap.getHeight(home.x, home.z) + (home.opts?.stories ?? 1) * 2.4, home.z)
+      scene.add(npc.roof)
+    }
   }
   const critters = new Critters({ tileMap, scene, spriteManager, groups: level.objects.filter(o => o.type === 'critters') })
   for (const s of [...npcs.map(n => n.sprite), ...critters.all.map(c => c.sprite)])
@@ -344,7 +353,17 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     postfx.render(dt)
   })
 
-  // residents (village.js) → their npcs: walk the route there, then Lumina's own wander at the spot
+  // residents (village.js) → their npcs: walk the route there, then Lumina's own wander at the spot.
+  // Routes: Lumina's walk grid and A* (game/combat/Nav.js: houses, trees, cliffs, stairs, bridges)
+  const nav = new Nav(tileMap, { maxExpand: 24000 })
+  const navBuf = new Float32Array(256)
+  const route = (x, z, to) => {
+    const n = nav.findPath(x, z, to[0], to[1], 400, navBuf)
+    if (n < 0) return [to] // no way: walk straight (the anti-stuck hop gets it there)
+    const pts = []
+    for (let i = 0; i < n; i++) pts.push([navBuf[2 * i], navBuf[2 * i + 1]])
+    return pts
+  }
   let residents = []
   const paths = new Map() // npc → remaining waypoints
   const shown = new Map() // npc → the emote over it
@@ -367,26 +386,60 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     const h = tileMap.getHeight(o.x, o.z) + (o.opts?.stories ?? 1) * 2.4 + 2.2
     return { el, at: new THREE.Vector3(o.x, h, o.z) }
   })
+  // the hover hint over a villager: the same plate, its chat's title and what it is doing
+  const WHAT = { blocked: 'waiting for you', failed: 'error', thinking: 'thinking', idle: 'idle', asleep: 'asleep' }
+  const tip = { el: document.createElement('div'), at: new THREE.Vector3(), text: '' }
+  tip.el.className = 'lvp3d-label region'
+  tip.el.style.zIndex = 1
+  container.append(tip.el)
+  let hovered = null
   const pv = new THREE.Vector3()
   function placePlates() {
-    for (const p of plates) {
+    const npc = hovered && npcs[hovered.slot]
+    tip.on = !!npc?.present
+    if (tip.on) {
+      const sub = [TRADE[hovered.spot], hovered.tool ?? WHAT[state(hovered, performance.now())]].filter(Boolean).join(' · ')
+      if (tip.text !== hovered.title + sub) {
+        tip.text = hovered.title + sub
+        tip.el.textContent = hovered.title
+        tip.el.append(Object.assign(document.createElement('small'), { textContent: sub }))
+      }
+      tip.at.copy(npc.position).setY(npc.position.y + (shown.get(npc) ? 3.4 : 2.2)) // above its emote, if any
+    }
+    for (const p of [...plates, tip]) {
       pv.copy(p.at).project(camera)
-      const on = pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1
+      const on = p.on !== false && pv.z < 1 && Math.abs(pv.x) < 1.1 && Math.abs(pv.y) < 1.1
       p.el.style.display = on ? '' : 'none'
       if (on) { p.el.style.left = `${(pv.x + 1) * 50}%`; p.el.style.top = `${(1 - pv.y) * 50}%` }
     }
   }
+  // the lamps the residents switch: each home's window light (House `windowLights`), the forge's
+  // sparks (only while a smith works there)
+  const near = (p, x, z, d) => Math.hypot(p.x - x, p.z - z) < d
+  const pool = world.lightPool
+  for (const npc of npcs) {
+    npc.lamp = pool.descriptors.find(d => d.flicker === 0.1 && d.intensity === 3 && near(d.position, ...npc.door, 1.6)) ?? null
+    pool.setHidden(npc.lamp, true, { instant: true })
+  }
+  const sparks = world.areaEmitters.find(a => a.preset === 'embers')?.emitter // the forge's (level emitter)
   function drive(dt, now) {
     const bound = new Set()
+    let smithing = false
     for (const r of residents) {
       const npc = npcs[r.slot]
       if (!npc) continue
       bound.add(npc)
+      const st = state(r, now)
+      // asleep at home: the window lit (at night: LightPool's nightOnly) and 'zzz' over the roof
+      const sleeping = st === 'asleep' && !npc.present
+      pool.setHidden(npc.lamp, !sleeping)
+      if (npc.roof && sleeping !== !!npc.zzz) { if (sleeping) emotes.show(npc.roof, 'zzz', Infinity, { offsetY: 1.2 }); else emotes.clear(npc.roof); npc.zzz = sleeping }
+      if (r.spot === 'forge' && r.arrivedAt && !paths.has(npc) && st.startsWith('tool')) smithing = true
       if (decide(r, now)) {
         const to = r.spot === 'home' ? npc.door : SPOTS[r.spot].at[r.point]
         if (!npc.present) { npc.placeAt(...npc.door); npc.setPresent(true) }
         npc.direct()
-        paths.set(npc, route([npc.position.x, npc.position.z], to))
+        paths.set(npc, route(npc.position.x, npc.position.z, to))
       }
       const path = paths.get(npc)
       if (path?.length) {
@@ -408,7 +461,12 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
         }
       } else if (r.spot === 'home' && !r.live && npc.present && !paths.has(npc)) npc.setPresent(false)
     }
-    for (const npc of npcs) if (!bound.has(npc) && npc.present) { paths.delete(npc); npc.setPresent(false) }
+    for (const npc of npcs) if (!bound.has(npc)) {
+      if (npc.present) { paths.delete(npc); npc.setPresent(false) }
+      pool.setHidden(npc.lamp, true)
+      if (npc.zzz) { emotes.clear(npc.roof); npc.zzz = false }
+    }
+    if (sparks) sparks.intensity = smithing ? 1 : 0 // (not `enabled`: World's particle cull owns it)
     placePlates()
     updateFrames(now)
     if (ui.fontsReady.done) renderChooser(now)
@@ -468,7 +526,6 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     }
     return best
   }
-  const WHAT = { blocked: 'waiting for you', failed: 'error', thinking: 'thinking', idle: 'idle', asleep: 'asleep' }
   let drag = null
   let onOpen = null
   const onDown = e => { drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }; el.setPointerCapture(e.pointerId) }
@@ -476,7 +533,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
     if (!drag) {
       // hover: the chat's title and what it is doing (the native tooltip)
       const r = residentAt(e.clientX, e.clientY)
-      el.title = r ? `${r.title} — ${r.tool ?? WHAT[state(r, performance.now())]}` : ''
+      hovered = r
       el.style.cursor = r && onOpen ? 'pointer' : ''
       return
     }
@@ -500,6 +557,8 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   el.addEventListener('pointerdown', onDown)
   el.addEventListener('pointermove', onMove)
   el.addEventListener('pointerup', onUp)
+  const onLeave = () => { hovered = null }
+  el.addEventListener('pointerleave', onLeave)
   el.addEventListener('wheel', onWheel, { passive: false })
 
   // pause while hidden
@@ -520,7 +579,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
   engine.start()
 
   return {
-    level, npcs, tileMap, rig, focus, engine, lighting, postfx, world,
+    level, npcs, tileMap, rig, focus, engine, lighting, postfx, world, nav,
     set onTick(fn) { onTick = fn },
     /** village.js residents (the array is read every frame; mutate it or set a new one) */
     set residents(list) { residents = list },
@@ -538,6 +597,7 @@ export async function createViewer(container, rawLevel, { hour = null } = {}) {
       ui.dispose()
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerleave', onLeave)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('wheel', onWheel)
       engine.stop()

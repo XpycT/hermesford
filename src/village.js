@@ -20,16 +20,16 @@ export const toolSpot = name => TOOLS.find(([re]) => re.test(name || ''))?.[1] ?
 // Where things are in levels/village.json (tools/make-village.mjs): [x, z] points, wander radius.
 // 'home' is the villager's own door (its level npc).
 export const SPOTS = {
-  forge: { at: [[40.4, 16.3], [39.2, 16.5]], wander: 0.3 },
+  forge: { at: [[43, 19.3], [41.6, 19.5]], wander: 0.3 },
   woods: { at: [[26, 6.5], [19.5, 5.5], [32, 4.6], [12.5, 6.5], [39.5, 7], [6, 5.2]], wander: 2.6 },
-  library: { at: [[21.9, 15.1], [23.9, 15.8]], wander: 0.2 },
-  carpentry: { at: [[22.0, 35.3], [24.0, 35.6]], wander: 0.3 },
-  townhall: { at: [[32.5, 17.6], [31.2, 17.7], [33.8, 17.7]], wander: 0.3 },
+  library: { at: [[24.3, 19], [22.4, 18.3]], wander: 0.2 },
+  carpentry: { at: [[20.8, 35.3], [21.4, 37.5]], wander: 0.3 },
+  townhall: { at: [[34, 18.9], [32.4, 19], [35.6, 19]], wander: 0.3 },
   well: { at: [[29.3, 22], [31.4, 22.4]], wander: 0.4 },
   lake: { at: [[12, 42.3], [8, 42.4], [16, 42.3]], wander: 0.6 },
-  field: { at: [[27.9, 45.5], [27.9, 47.5]], wander: 0.6 },
+  field: { at: [[31, 44.8], [37, 45.2]], wander: 0.6 },
   campfire: { at: [[29.7, 25], [31.9, 25.2], [30.8, 26.6]], wander: 0.2 },
-  plaza: { at: [[26.5, 23.5], [23.5, 20.4], [30, 20.6]], wander: 3 },
+  plaza: { at: [[27, 23.6], [32.2, 23.2], [29, 19.6]], wander: 3 },
   home: { at: [], wander: 0.6 },
 }
 const WORKS = new Set(['forge', 'woods', 'library', 'carpentry', 'townhall', 'well', 'lake', 'field'])
@@ -97,30 +97,6 @@ export function decide(r, now) {
   r.spotAt = now
   r.arrivedAt = 0
   return true
-}
-
-// Streets: A and B run west–east at these z (bridges cross the river on them), the main road runs
-// north–south at x 26 and climbs the stair (z 8–14, cut into the cliff) onto the woodland terrace.
-const ROAD_X = 26
-const STREETS = [18, 39]
-const TERRACE_Z = 8.5
-const street = z => (Math.abs(z - STREETS[0]) <= Math.abs(z - STREETS[1]) ? STREETS[0] : STREETS[1])
-
-/** Waypoints from `a` to `b` ([x, z]) along the streets, the road and the stair; ends at b. */
-export function route(a, b) {
-  const pts = []
-  let [x, z] = a
-  if (z < TERRACE_Z) { pts.push([ROAD_X, 6.8], [ROAD_X, 14.6]); [x, z] = [ROAD_X, 14.6] }
-  const up = b[1] < TERRACE_Z
-  const sA = street(z), sB = up ? STREETS[0] : street(b[1])
-  const tx = up ? ROAD_X : b[0]
-  pts.push([x, sA])
-  if (sA !== sB) pts.push([ROAD_X, sA], [ROAD_X, sB])
-  pts.push([tx, sB])
-  if (up) pts.push([ROAD_X, 14.6], [ROAD_X, 6.8])
-  pts.push(b)
-  // drop zero-length legs
-  return pts.filter((p, i) => { const q = i ? pts[i - 1] : a; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.3 || i === pts.length - 1 })
 }
 
 // ---- Hermes → village (plugin.js feeds these; kept here so the test covers them) ----------------
