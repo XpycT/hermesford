@@ -20,6 +20,7 @@ import { icon } from '../vendor/lumina/src/engine/ui/art/icons/combat.js'
 import { Weather } from '../vendor/lumina/src/game/Weather.js'
 import { installFogStart, setFogStart } from '../vendor/lumina/src/game/AtmosphereFog.js'
 import { UI } from '../vendor/lumina/src/engine/ui/UI.js'
+import { startFonts } from '../vendor/lumina/src/engine/ui/FontLoader.js'
 import { Emotes } from '../vendor/lumina/src/engine/ui/Emotes.js'
 import { Journal } from '../vendor/lumina/src/engine/ui/Journal.js'
 import { EndCard } from '../vendor/lumina/src/engine/ui/EndCard.js'
@@ -197,7 +198,8 @@ async function mount(container, rawLevel, { hour = null, bannersShown = new Set(
 
   // Lumina's UI: place plate + clock + minimap (top), controls legend (bottom-left), area banner,
   // world map, toasts, emote bubbles. English only: its pixel fonts have no Cyrillic.
-  const ui = new UI(container, { lang: 'en' })
+  // Fonts in local mode: the bundled (inlined) faces, no Google Fonts fetch, no localStorage.
+  const ui = new UI(container, { lang: 'en', fonts: startFonts({ lang: 'en', mode: 'local' }) })
   // the story UI as Lumina's sandbox/story_ui sets it up: ui.update moves the emote bubbles
   const { emotes } = ui.useStoryUI({ Journal, Emotes, EndCard })
   // the villagers awake, top-left under the place plate (Lumina's party frames): who, doing what

@@ -24,6 +24,20 @@ const inlineCss = {
   },
 }
 
+// Water's shore-bake worker (shoreWorker.js) isn't shipped next to the single plugin.js: no worker,
+// Water bakes the shore on the main thread (its own fallback for `_newShoreWorker() === null`).
+const WORKER = "new Worker(new URL('./shoreWorker.js', import.meta.url), { type: 'module' })"
+const noShoreWorker = {
+  name: 'no-shore-worker',
+  setup(b) {
+    b.onLoad({ filter: /engine[\\/]world[\\/]Water\.js$/ }, async ({ path }) => {
+      const src = await fs.promises.readFile(path, 'utf8')
+      if (!src.includes(WORKER)) throw new Error(`no-shore-worker: the Worker line moved in ${path}`)
+      return { contents: src.replace(WORKER, 'null'), loader: 'js' }
+    })
+  },
+}
+
 await esbuild.build({
   entryPoints: [dev ? 'src/dev.js' : 'src/plugin.js'],
   bundle: true,
@@ -32,7 +46,7 @@ await esbuild.build({
   sourcemap: dev,
   outfile: dev ? 'dev/dev.js' : 'desktop/plugin.js',
   external: dev ? [] : ['@hermes/plugin-sdk', 'react', 'react/jsx-runtime'],
-  plugins: [inlineCss],
+  plugins: [inlineCss, noShoreWorker],
   logLevel: 'warning',
 })
 if (!dev && process.argv.includes('--install')) {
